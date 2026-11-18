@@ -1,5 +1,5 @@
 // Caches the app shell so it opens with weak signal. Time punches always go to the server.
-const CACHE = 'imt-timeclock-v4';
+const CACHE = 'imt-timeclock-v5';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
