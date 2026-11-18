@@ -33,6 +33,12 @@
   .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
   .toolbar .grow { flex:1; }
   .card { background:var(--card); border-radius:12px; padding:16px 18px; margin-bottom:16px; box-shadow:0 1px 2px rgba(0,0,0,.06); }
+  .pics { display:flex; gap:14px; flex-wrap:wrap; }
+  .pics figure { margin:0; }
+  .pics img { width:200px; max-width:42vw; height:auto; border-radius:8px; border:1px solid var(--line); display:block; }
+  .pics figcaption { font-size:12px; color:var(--muted); margin-top:4px; }
+  .sec label { display:flex; align-items:center; gap:8px; margin-top:8px; font-weight:500; }
+  .ph { margin-top:4px; font-size:12px; }
   .tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:16px; }
   .tile { background:#fff; border-radius:12px; padding:14px 16px; box-shadow:0 1px 2px rgba(0,0,0,.06); cursor:pointer; }
   .tile .n { font-size:28px; font-weight:700; }
@@ -210,6 +216,7 @@ function statusTags(s) {
   else t.push('<span class="tag warn">To approve</span>');
   if (s.long_shift) t.push('<span class="tag bad" title="Longer than a normal day — probably a forgotten clock-out">Very long shift</span>');
   if (s.manual) t.push(`<span class="tag" title="Entered by ${esc(s.created_by || '')}, not punched on a phone">Added by hand</span>`);
+  else if (S.settings && S.settings.require_photo && !s.has_photo_in) t.push('<span class="tag warn" title="No photo was taken at clock-in">No photo</span>');
   if (s.worker_response === 'declined') t.push(`<span class="tag warn" title="${esc(s.worker_note)}">Worker declined: ${esc(s.worker_note || '')}</span>`);
   if (s.worker_response === 'accepted') t.push('<span class="tag ok">Worker accepted</span>');
   if (s.outside_in) t.push(`<span class="tag bad">In outside ${fDist(s.in_distance_m)}</span>`);
@@ -238,6 +245,7 @@ async function loadRef() {
     all(() => sb.from('tc_cost_codes').select('*').order('job_code').order('code')),
     all(() => sb.from('tc_employees').select('*').order('code'))]);
   S.jobs = jobs; S.ccs = ccs; S.emps = emps;
+  { const r = await sb.from('tc_settings').select('*').limit(1); S.settings = (r.data && r.data[0]) || {}; }
 }
 function renderLogin(msg = '') {
   $root.innerHTML = `<div class="login"><div class="lg"><img src="../logo.png" alt="IMT Construction"></div><h1>Timeclock · Admin</h1>
@@ -458,18 +466,26 @@ PAGE.employees = async main => {
   const bg = S.emps.find(e => e.is_breakglass), iAmAdmin = S.me.role === 'admin';
   const lastIn = {}; { const r = await sb.rpc('tc_last_signins'); (r.data || []).forEach(x => { lastIn[x.code] = x.last_sign_in; }); }
   const when = iso => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const exempt = e => e.is_breakglass || e.role === 'office' || e.role === 'admin';
+  const phoneLine = e => exempt(e) ? (S.settings.one_phone && !e.is_breakglass ? '<div class="ph muted">Any phone (office/admin)</div>' : '')
+    : e.phone_registered_at ? `<div class="ph">Phone registered ${esc(when(e.phone_registered_at))} <button class="btn sm" data-rp="${esc(e.code)}">Reset phone</button></div>`
+    : S.settings.one_phone ? '<div class="ph muted">No phone registered yet</div>' : '';
   const bgUsed = bg ? lastIn[bg.code] || null : null;
   main.innerHTML = `<h1>Employees</h1><div class="sub">Changes save as soon as you change a field. Employee numbers should match ComputerEase. Last sign-in is the last time the PIN was entered; phones stay signed in between uses.</div>${flash()}
     <div class="toolbar"><input id="eq" placeholder="Search" style="width:220px"><span class="grow"></span><button class="btn primary" id="add">Add employee</button></div>
+    <div class="card sec"><b>Clock-in security</b>
+      <label><input type="checkbox" id="secPhoto" ${S.settings.require_photo ? 'checked' : ''} ${iAmAdmin ? '' : 'disabled'}> Photo at every punch</label>
+      <label><input type="checkbox" id="secPhone" ${S.settings.one_phone ? 'checked' : ''} ${iAmAdmin ? '' : 'disabled'}> One phone per employee</label>
+      <div class="muted" style="margin-top:8px">Only an admin can change these. With one phone per employee, a worker or foreman can only punch from the phone they first punched from, and that phone cannot punch for anyone else. Office and admin logins can use any phone.</div></div>
     <div class="card" style="padding:0"><div class="scroll"><table class="cards t-emp">
-      <thead><tr><th>#</th><th>Name</th><th>Role</th><th>Language</th><th>Active</th><th>Sign-in</th><th>Last sign-in</th><th></th></tr></thead>
+      <thead><tr><th>#</th><th>Name</th><th>Role</th><th>Language</th><th>Active</th><th>Sign-in</th><th>Last sign-in / phone</th><th></th></tr></thead>
       <tbody>${list.map(e => `<tr data-code="${esc(e.code)}" data-name="${esc((e.first_name + ' ' + e.last_name + ' ' + e.code).toLowerCase())}">
         <td>${esc(e.code)}</td><td><b>${esc(e.last_name)}, ${esc(e.first_name)}</b>${e.is_breakglass ? ' <span class="tag warn">Emergency login</span>' : ''}</td>
         <td><select class="er" ${e.is_breakglass ? 'disabled' : ''}>${roles.map(r => `<option ${e.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></td>
         <td>${e.is_breakglass ? '' : `<select class="el"><option value="es" ${e.language === 'es' ? 'selected' : ''}>Spanish</option><option value="en" ${e.language === 'en' ? 'selected' : ''}>English</option></select>`}</td>
         <td>${e.is_breakglass ? '<span class="tag ok">Always on</span>' : `<input type="checkbox" class="ea" ${e.is_active ? 'checked' : ''}>`}</td>
         <td>${e.is_breakglass ? (e.has_pin ? '<span class="tag ok">Password set</span>' : '<span class="tag">No password</span>') : e.has_pin ? '<span class="tag ok">PIN set</span>' : '<span class="tag">No PIN</span>'}</td>
-        <td class="ls">${lastIn[e.code] ? esc(when(lastIn[e.code])) : e.has_pin ? 'Never' : '—'}</td>
+        <td class="ls">${lastIn[e.code] ? esc(when(lastIn[e.code])) : e.has_pin ? 'Never' : '—'}${phoneLine(e)}</td>
         <td>${e.is_breakglass ? `<button class="btn sm" data-bg="${esc(e.code)}" ${iAmAdmin ? '' : 'disabled'}>${e.has_pin ? 'Reset password' : 'Set password'}</button>` : `<button class="btn sm" data-pin="${esc(e.code)}">${e.has_pin ? 'Reset PIN' : 'Set PIN'}</button>`}</td></tr>`).join('')}</tbody></table></div></div>
     ${bg ? `<div class="sub" id="bgNote" style="margin-top:12px"><b>Emergency login.</b> For when the normal admin login cannot be used. Sign in on this site with employee number <b>${esc(bg.code)}</b> and its password. Only an admin can set the password, and it cannot be switched off here. ${bg.has_pin ? `Last used: <b>${bgUsed ? esc(when(bgUsed)) : 'never'}</b>.` : 'No password is set yet, so it cannot be used.'}</div>` : ''}`;
   document.getElementById('eq').oninput = e => { const q = e.target.value.toLowerCase(); main.querySelectorAll('tr[data-name]').forEach(tr => tr.classList.toggle('hide', !tr.dataset.name.includes(q))); };
@@ -480,6 +496,24 @@ PAGE.employees = async main => {
   });
   main.querySelectorAll('[data-pin]').forEach(b => b.onclick = () => pinDialog(b.dataset.pin));
   main.querySelectorAll('[data-bg]').forEach(b => b.onclick = () => breakglassDialog(b.dataset.bg));
+  main.querySelectorAll('[data-rp]').forEach(b => b.onclick = () => {
+    const e = S.emps.find(x => x.code === b.dataset.rp);
+    confirmDialog('Reset phone', `${e.first_name} ${e.last_name} (${e.code}) will be able to punch from a different phone. The next phone they punch from becomes their registered phone.`, 'Reset phone', async () => {
+      const { error } = await sb.rpc('tc_reset_device', { p_code: e.code });
+      if (error) return dErr(errText(error));
+      closeDlg(); S.flash = `Phone reset for ${e.first_name} ${e.last_name}.`; render();
+    });
+  });
+  main.querySelectorAll('.sec input').forEach(c => c.onchange = () => {
+    const photo = document.getElementById('secPhoto').checked, phone = document.getElementById('secPhone').checked;
+    const what = c.id === 'secPhoto' ? 'the photo at every punch' : 'the one-phone-per-employee rule';
+    const save = async () => {
+      const { error } = await sb.rpc('tc_set_security', { p_require_photo: photo, p_one_phone: phone });
+      if (error) return dErr(errText(error));
+      closeDlg(); S.flash = `Clock-in security updated: ${c.checked ? 'turned on' : 'turned off'} ${what}.`; render();
+    };
+    confirmDialog(c.checked ? 'Turn on' : 'Turn off', `${c.checked ? 'Turn on' : 'Turn off'} ${what} for everyone? It takes effect on each phone the next time the app is opened or reloaded.`, c.checked ? 'Turn on' : 'Turn off', save, () => { c.checked = !c.checked; });
+  });
   document.getElementById('add').onclick = () => addEmployeeDialog();
 };
 
@@ -587,9 +621,11 @@ function addShiftDialog() {
 }
 
 async function historyDialog(s) {
-  const [{ data: edits }, { data: checks }] = await Promise.all([
+  const [{ data: edits }, { data: checks }, { data: photos }] = await Promise.all([
     sb.from('tc_shift_edits').select('*').eq('entry_id', s.id).order('edited_at'),
-    sb.from('tc_location_checks').select('*').eq('entry_id', s.id).order('checked_at')]);
+    sb.from('tc_location_checks').select('*').eq('entry_id', s.id).order('checked_at'),
+    sb.from('tc_punch_photos').select('*').eq('entry_id', s.id)]);
+  const pic = k => (photos || []).find(p => p.kind === k);
   const mapLink = (lat, lng) => lat != null ? `<a target="_blank" href="https://www.google.com/maps?q=${lat},${lng}">map</a>` : '';
   openDlg(`<h1>Shift history</h1><div class="sub">${esc(s.first_name)} ${esc(s.last_name)} · ${fDate(s.work_date)} · ${esc(s.job_code)} ${esc(s.cost_code || '')}</div>
     <table>
@@ -599,6 +635,8 @@ async function historyDialog(s) {
       <tr><td>Worker</td><td colspan="2">${s.worker_response ? `${esc(s.worker_response)} ${s.worker_responded_at ? new Date(s.worker_responded_at).toLocaleString('en-US') : ''} ${esc(s.worker_note || '')}` : '<span class="muted">not reviewed yet</span>'}</td></tr>
       <tr><td>Approval</td><td colspan="2">${s.status === 'approved' ? `Approved by ${esc(s.approved_by)} ${new Date(s.approved_at).toLocaleString('en-US')}` : s.status === 'rejected' ? `Declined by ${esc(s.declined_by)}: ${esc(s.decline_reason)}` : '<span class="muted">not approved</span>'}</td></tr>
     </table>
+    <h3 style="margin:16px 0 6px">Punch photos</h3>
+    ${(photos || []).length ? `<div class="pics">${['in', 'out'].filter(pic).map(k => `<figure><img src="data:image/jpeg;base64,${pic(k).photo}" alt=""><figcaption>Clock ${k} · ${new Date(pic(k).taken_at).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' })}</figcaption></figure>`).join('')}</div>` : `<div class="muted">${s.manual ? 'None. This shift was added by hand.' : 'No photos were taken for this shift.'}</div>`}
     <h3 style="margin:16px 0 6px">Changes</h3>
     ${(edits || []).length ? `<table><thead><tr><th>When</th><th>By</th><th>Reason</th><th>Before</th><th>After</th></tr></thead><tbody>${edits.map(e => `<tr>
       <td class="nowrap">${new Date(e.edited_at).toLocaleString('en-US')}</td><td>${esc(e.edited_by_name)}</td><td>${esc(e.reason)}</td>
@@ -610,6 +648,12 @@ async function historyDialog(s) {
   document.getElementById('c').onclick = closeDlg;
 }
 
+function confirmDialog(title, text, okText, onOk, onCancel) {
+  openDlg(`<h1>${esc(title)}</h1><div class="sub">${esc(text)}</div><div id="de"></div>
+    <div class="toolbar" style="margin-top:16px;justify-content:flex-end"><button class="btn" id="c">Cancel</button><button class="btn primary" id="ok">${esc(okText)}</button></div>`);
+  document.getElementById('c').onclick = () => { closeDlg(); if (onCancel) onCancel(); };
+  document.getElementById('ok').onclick = onOk;
+}
 function breakglassDialog(code) {
   const e = S.emps.find(x => x.code === code);
   openDlg(`<h1>${e.has_pin ? 'Reset' : 'Set'} emergency password</h1><div class="sub">Sign-in name: <b>${esc(code)}</b> · works on the admin site only</div>
