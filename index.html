@@ -235,7 +235,7 @@ function renderLogin(step = 'code', code = '') {
   if (step === 'code') {
     $app.innerHTML = `<div class="brandbox"><img src="logo.png" alt="IMT Construction"></div><div class="card">
       <label>${t('empNum')}</label>
-      <input id="code" inputmode="numeric" autocomplete="username" value="${esc(code || localStorage.getItem('lastCode') || '')}" placeholder="0002">
+      <input id="code" inputmode="numeric" autocomplete="username" value="${esc(code || localStorage.getItem('lastCode') || '')}" placeholder="1202">
       <div id="e"></div>
       <button class="btn primary" style="width:100%;margin-top:14px;padding:14px;font-size:18px" id="go">${t('next')}</button></div>`;
     const go = () => { const c = document.getElementById('code').value.trim(); if (c) renderLogin('pin', c); };
