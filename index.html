@@ -96,7 +96,9 @@ const T = {
     not_an_employee:'Su usuario no está activo. Hable con la oficina.', not_allowed:'No tiene permiso.',
     pin_must_be_6_digits:'El PIN debe tener 6 números.', reason_required:'Escriba la razón.',
     worker:'Trabajador', foreman:'Capataz', officeRole:'Oficina', admin:'Admin', mon:'Lun', tue:'Mar', wed:'Mié', thu:'Jue', fri:'Vie', sat:'Sáb', sun:'Dom',
-    stillIn:'Todavía en el reloj', approvedCount:n=>`${n} aprobado(s).`, search:'Buscar…'
+    stillIn:'Todavía en el reloj', approvedCount:n=>`${n} aprobado(s).`, search:'Buscar…',
+    costCode:'Código de costo', pickCostCode:'Escoja el código de costo', cost_code_required:'Escoja el código de costo.', cost_code_not_on_job:'Ese código no es de este trabajo.',
+    jobCost:'Costo por trabajo', laborHours:'Horas', workers:'Trabajadores', addCostCode:'Agregar código de costo', code:'Código', description:'Descripción', add:'Agregar', noCode:'(sin código)'
   },
   en: {
     appTitle:'IMT Timeclock', empNum:'Employee number', pin:'PIN (6 digits)', signIn:'Sign in', next:'Next', back:'Back',
@@ -117,14 +119,16 @@ const T = {
     not_an_employee:'Your login is not active. Talk to the office.', not_allowed:'Not allowed.',
     pin_must_be_6_digits:'PIN must be 6 numbers.', reason_required:'Enter a reason.',
     worker:'Worker', foreman:'Foreman', officeRole:'Office', admin:'Admin', mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun',
-    stillIn:'Still clocked in', approvedCount:n=>`${n} approved.`, search:'Search…'
+    stillIn:'Still clocked in', approvedCount:n=>`${n} approved.`, search:'Search…',
+    costCode:'Cost code', pickCostCode:'Pick the cost code', cost_code_required:'Pick the cost code.', cost_code_not_on_job:'That cost code is not on this job.',
+    jobCost:'Job cost', laborHours:'Hours', workers:'Workers', addCostCode:'Add cost code', code:'Code', description:'Description', add:'Add', noCode:'(no code)'
   }
 };
 let lang = localStorage.getItem('lang') || ((navigator.language||'es').startsWith('en') ? 'en' : 'es');
 const t = k => (T[lang][k] ?? k);
 
 // ---------------- state ----------------
-const S = { me:null, jobs:[], tab:'clock', officeTab:'payroll', crewDate:todayStr(), week:weekStart(todayStr()), timer:null };
+const S = { me:null, jobs:[], costCodes:[], tab:'clock', officeTab:'payroll', crewDate:todayStr(), week:weekStart(todayStr()), timer:null };
 const $app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -137,9 +141,20 @@ function h(n) { return (Math.round((Number(n) || 0) * 100) / 100).toFixed(2); }
 function toLocalInput(iso) { if (!iso) return ''; const d = new Date(iso); const z = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; }
 function errText(e) {
   const m = (e && (e.message || e.error_description || String(e))) || '';
-  for (const k of ['already_clocked_in','not_clocked_in','job_not_active','not_an_employee','not_allowed','pin_must_be_6_digits','reason_required']) if (m.includes(k)) return t(k);
+  for (const k of ['already_clocked_in','not_clocked_in','job_not_active','not_an_employee','not_allowed','pin_must_be_6_digits','reason_required','cost_code_required','cost_code_not_on_job']) if (m.includes(k)) return t(k);
   if (/fetch|network|Failed/i.test(m)) return t('noSignal');
   return m;
+}
+function codesFor(job, activeOnly = true) { return S.costCodes.filter(c => c.job_code === job && (!activeOnly || c.is_active)); }
+function ccName(job, code) { if (!code) return ''; const c = S.costCodes.find(x => x.job_code === job && x.code === code); return c ? `${c.code} – ${c.description}` : code; }
+function ccOptions(job, selected, activeOnly = true) {
+  const list = codesFor(job, activeOnly);
+  return list.length ? `<option value="">—</option>` + list.map(c => `<option value="${esc(c.code)}" ${c.code === selected ? 'selected' : ''}>${esc(c.code)} – ${esc(c.description)}</option>`).join('') : '';
+}
+// wire a job <select> to a cost-code <select>; hides the cost-code box when the job has no codes
+function wireCostCode(jobSel, ccSel, ccWrap, selected = '', activeOnly = true) {
+  const sync = () => { const html = ccOptions(jobSel.value, selected, activeOnly); ccSel.innerHTML = html; ccWrap.classList.toggle('hide', !html); selected = ''; };
+  jobSel.addEventListener('change', sync); sync();
 }
 function jobName(code) { const j = S.jobs.find(x => x.code === code); return j ? `${j.code} – ${j.description}` : (code || '—'); }
 function isLead() { return S.me && ['foreman','office','admin'].includes(S.me.role); }
@@ -156,8 +171,10 @@ async function loadMe() {
   if (error || !data) { S.me = null; return; }
   S.me = data;
   if (!localStorage.getItem('lang')) lang = data.language;
-  const { data: jobs } = await sb.from('tc_jobs').select('*').order('code');
-  S.jobs = jobs || [];
+  const [{ data: jobs }, { data: ccs }] = await Promise.all([
+    sb.from('tc_jobs').select('*').order('code'),
+    sb.from('tc_cost_codes').select('*').order('code').limit(5000)]);
+  S.jobs = jobs || []; S.costCodes = ccs || [];
 }
 
 function renderChrome() {
@@ -248,13 +265,15 @@ async function renderClock(flash = '') {
     <div class="card">
       <div class="muted">${fmtDate(todayStr())}</div>
       <div class="status">${open ? '🟢 ' + t('clockedIn') : '⚪ ' + t('clockedOut')}</div>
-      ${open ? `<div class="muted">${t('job')}: <b>${esc(jobName(open.job_code))}</b><br>${t('since')} ${fmtTime(open.clock_in)}</div>
+      ${open ? `<div class="muted">${t('job')}: <b>${esc(jobName(open.job_code))}</b>${open.cost_code ? `<br>${t('costCode')}: <b>${esc(ccName(open.job_code, open.cost_code))}</b>` : ''}<br>${t('since')} ${fmtTime(open.clock_in)}</div>
                 <div class="timer" id="timer"></div>
                 <button class="big out" id="outBtn">${t('clockOut')}</button>
                 <details style="margin-top:14px"><summary class="muted">${t('changeJob')}</summary>
                   <select id="job" style="margin-top:8px">${jobOpts}</select>
+                  <div id="ccWrap" class="hide"><label>${t('costCode')}</label><select id="cc"></select></div>
                   <button class="btn primary" style="width:100%;margin-top:8px" id="swBtn">${t('changeJob')}</button></details>`
              : `<label>${t('pickJob')}</label><select id="job"><option value="">—</option>${jobOpts}</select>
+                <div id="ccWrap" class="hide"><label>${t('pickCostCode')}</label><select id="cc"></select></div>
                 <div style="height:14px"></div><button class="big in" id="inBtn">${t('clockIn')}</button>`}
       <div id="e"></div>
     </div>
@@ -265,6 +284,9 @@ async function renderClock(flash = '') {
     </div>`;
 
   const err = m => document.getElementById('e').innerHTML = `<div class="err">${esc(m)}</div>`;
+  const jobEl = document.getElementById('job'), ccEl = document.getElementById('cc');
+  if (jobEl) wireCostCode(jobEl, ccEl, document.getElementById('ccWrap'), open ? open.cost_code : (localStorage.getItem('lastCC') || ''));
+  const pickedCC = () => { const v = ccEl && !document.getElementById('ccWrap').classList.contains('hide') ? ccEl.value : ''; return v || null; };
   const busy = (btn, on) => { if (btn) { btn.disabled = on; if (on) btn.textContent = t('gettingGps'); } };
 
   if (open) {
@@ -279,22 +301,26 @@ async function renderClock(flash = '') {
       renderClock(`${t('done')} ✓`);
     };
     document.getElementById('swBtn').onclick = async e => {
-      const job = document.getElementById('job').value; if (!job || job === open.job_code) return;
+      const job = document.getElementById('job').value, cc = pickedCC();
+      if (!job || (job === open.job_code && cc === (open.cost_code || null))) return;
+      if (codesFor(job).length && !cc) return err(t('cost_code_required'));
       busy(e.target, true);
       const g = await getGps();
-      const { error } = await sb.rpc('tc_switch_job', { p_job: job, p_lat: g.lat ?? null, p_lng: g.lng ?? null });
+      const { error } = await sb.rpc('tc_switch_job', { p_job: job, p_cost_code: cc, p_lat: g.lat ?? null, p_lng: g.lng ?? null });
       if (error) { busy(e.target, false); e.target.textContent = t('changeJob'); return err(errText(error)); }
-      localStorage.setItem('lastJob', job); renderClock(`${t('done')} ✓`);
+      localStorage.setItem('lastJob', job); localStorage.setItem('lastCC', cc || ''); renderClock(`${t('done')} ✓`);
     };
   } else {
     document.getElementById('inBtn').onclick = async e => {
       const job = document.getElementById('job').value;
       if (!job) return err(t('pickJob'));
+      const cc = pickedCC();
+      if (codesFor(job).length && !cc) return err(t('cost_code_required'));
       busy(e.target, true);
       const g = await getGps();
-      const { error } = await sb.rpc('tc_clock_in', { p_job: job, p_lat: g.lat ?? null, p_lng: g.lng ?? null });
+      const { error } = await sb.rpc('tc_clock_in', { p_job: job, p_cost_code: cc, p_lat: g.lat ?? null, p_lng: g.lng ?? null });
       if (error) { busy(e.target, false); e.target.textContent = t('clockIn'); return err(errText(error)); }
-      localStorage.setItem('lastJob', job); renderClock(`${t('done')} ✓`);
+      localStorage.setItem('lastJob', job); localStorage.setItem('lastCC', cc || ''); renderClock(`${t('done')} ✓`);
     };
   }
 }
@@ -326,7 +352,7 @@ async function renderCrew(flash = '') {
         ${rows.map(s => `<tr>
           <td>${s.clock_out && s.status !== 'approved' ? `<input type="checkbox" class="ck" value="${s.id}" checked style="width:22px;height:22px">` : ''}</td>
           <td><b>${esc(s.first_name)} ${esc(s.last_name)}</b>${s.work_date !== d ? `<br><span class="muted">${fmtDate(s.work_date)}</span>` : ''}</td>
-          <td>${esc(s.job_code || '—')}</td>
+          <td>${esc(s.job_code || '—')}${s.cost_code ? `<br><span class="muted">${esc(s.cost_code)} ${esc(s.cost_code_description || '')}</span>` : ''}</td>
           <td>${fmtTime(s.clock_in)}</td><td>${fmtTime(s.clock_out)}</td>
           <td class="n">${s.clock_out ? h(s.net_hours) : '—'}</td>
           <td>${statusTag(s)}</td>
@@ -356,18 +382,20 @@ function editDialog(s, after) {
   document.getElementById('dlgBody').innerHTML = `
     <div class="status">${esc(s.first_name)} ${esc(s.last_name)}</div>
     <label>${t('job')}</label><select id="ej">${jobOpts}</select>
+    <div id="ecw" class="hide"><label>${t('costCode')}</label><select id="ecc"></select></div>
     <label>${t('in')}</label><input type="datetime-local" id="ei" value="${toLocalInput(s.clock_in)}">
     <label>${t('out')}</label><input type="datetime-local" id="eo" value="${toLocalInput(s.clock_out)}">
     <label>${t('reason')}</label><input id="er" maxlength="200">
     <div id="ee"></div>
     <div class="row" style="margin-top:14px"><button class="btn" id="ec">${t('cancel')}</button><button class="btn primary" id="es">${t('save')}</button></div>`;
   dlg.showModal();
+  wireCostCode(document.getElementById('ej'), document.getElementById('ecc'), document.getElementById('ecw'), s.cost_code || '', false);
   document.getElementById('ec').onclick = () => dlg.close();
   document.getElementById('es').onclick = async () => {
     const reason = document.getElementById('er').value.trim();
     if (!reason) return document.getElementById('ee').innerHTML = `<div class="err">${t('reasonReq')}</div>`;
     const ci = document.getElementById('ei').value, co = document.getElementById('eo').value;
-    const { error } = await sb.rpc('tc_edit_entry', { p_id: s.id, p_clock_in: new Date(ci).toISOString(), p_clock_out: co ? new Date(co).toISOString() : null, p_job: document.getElementById('ej').value, p_reason: reason });
+    const { error } = await sb.rpc('tc_edit_entry', { p_id: s.id, p_clock_in: new Date(ci).toISOString(), p_clock_out: co ? new Date(co).toISOString() : null, p_job: document.getElementById('ej').value, p_cost_code: (document.getElementById('ecw').classList.contains('hide') ? null : (document.getElementById('ecc').value || null)), p_reason: reason });
     if (error) return document.getElementById('ee').innerHTML = `<div class="err">${esc(errText(error))}</div>`;
     dlg.close(); after();
   };
@@ -380,7 +408,7 @@ function csv(rows, cols, name) {
 }
 
 async function renderOffice(flash = '') {
-  const sub = [['payroll', t('payroll')], ['pending', t('pending')], ['certified', t('certified')], ['employees', t('employees')], ['jobs', t('jobs')]];
+  const sub = [['payroll', t('payroll')], ['pending', t('pending')], ['certified', t('certified')], ['jobcost', t('jobCost')], ['employees', t('employees')], ['jobs', t('jobs')]];
   const weekBar = `<div class="row" style="margin-bottom:12px"><button class="btn" id="pw" style="flex:0;white-space:nowrap">${t('prev')}</button>
     <div style="text-align:center"><b>${t('week')}</b> ${fmtDate(S.week)} – ${fmtDate(addDays(S.week, 6))}</div>
     <button class="btn" id="nw" style="flex:0;white-space:nowrap">${t('nextW')}</button></div>`;
@@ -402,7 +430,7 @@ async function renderOffice(flash = '') {
     S._rows = data;
     body = weekBar + `<div class="scroll"><table><tr><th></th><th>${t('date')}</th><th>${t('name')}</th><th>${t('job')}</th><th>${t('in')}</th><th>${t('out')}</th><th class="n">${t('total')}</th><th></th></tr>
       ${data.map(s => `<tr><td>${s.clock_out ? `<input type="checkbox" class="ck" value="${s.id}" style="width:22px;height:22px">` : ''}</td>
-        <td>${fmtDate(s.work_date)}</td><td>${esc(s.first_name)} ${esc(s.last_name)}</td><td>${esc(s.job_code || '—')}</td>
+        <td>${fmtDate(s.work_date)}</td><td>${esc(s.first_name)} ${esc(s.last_name)}</td><td>${esc(s.job_code || '—')}${s.cost_code ? `<br><span class="muted">${esc(s.cost_code)}</span>` : ''}</td>
         <td>${fmtTime(s.clock_in)}</td><td>${s.missed_clockout ? `<span class="tag bad">${t('missed')}</span>` : fmtTime(s.clock_out)}</td>
         <td class="n">${s.clock_out ? h(s.net_hours) : '—'}</td><td><button class="btn" data-edit="${s.id}">${t('edit')}</button></td></tr>`).join('') || `<tr><td colspan="8" class="muted">—</td></tr>`}
       </table></div><button class="btn green" style="margin-top:12px" id="apr">${t('approve')}</button>`;
@@ -417,6 +445,16 @@ async function renderOffice(flash = '') {
       <tr><th>#</th><th>${t('name')}</th>${dk.map(k => `<th class="n">${t(k)}</th>`).join('')}<th class="n">${t('total')}</th></tr>
       ${byJob[j].map(r => `<tr><td>${esc(r.employee_code)}</td><td>${esc(r.last_name)}, ${esc(r.first_name)}${r.unapproved_shifts > 0 ? ` <span class="tag warn">${t('unapproved')}</span>` : ''}</td>${dk.map(k => `<td class="n">${r[k] ? h(r[k]) : ''}</td>`).join('')}<td class="n"><b>${h(r.total_hours)}</b></td></tr>`).join('')}
       </table></div>`).join('') || `<div class="muted">—</div>`) + `<button class="btn" id="dl" style="margin-top:12px">${t('download')}</button>`;
+  }
+
+  if (ot === 'jobcost') {
+    const { data = [] } = await sb.from('tc_job_cost_hours').select('*').eq('week_start', S.week).order('job_code').order('cost_code');
+    S._rows = data;
+    const byJob = {}; data.forEach(r => (byJob[r.job_code] ||= []).push(r));
+    body = weekBar + (Object.keys(byJob).map(j => `<h3 style="margin:16px 0 6px">${esc(jobName(j))}</h3><table>
+      <tr><th>${t('costCode')}</th><th class="n">${t('workers')}</th><th class="n">${t('laborHours')}</th></tr>
+      ${byJob[j].map(r => `<tr><td>${r.cost_code ? `${esc(r.cost_code)} – ${esc(r.cost_code_description || '')}` : `<span class="muted">${t('noCode')}</span>`}${r.unapproved_shifts > 0 ? ` <span class="tag warn">${t('unapproved')}</span>` : ''}</td><td class="n">${r.workers}</td><td class="n"><b>${h(r.labor_hours)}</b></td></tr>`).join('')}
+      <tr><th></th><th>${t('total')}</th><th class="n">${h(byJob[j].reduce((a, r) => a + +r.labor_hours, 0))}</th></tr></table>`).join('') || `<div class="muted">—</div>`) + `<button class="btn" id="dl" style="margin-top:12px">${t('download')}</button>`;
   }
 
   if (ot === 'employees') {
@@ -435,8 +473,13 @@ async function renderOffice(flash = '') {
   if (ot === 'jobs') {
     const { data = [] } = await sb.from('tc_jobs').select('*').order('code');
     S._rows = data;
-    body = `<div class="scroll"><table><tr><th>#</th><th>${t('job')}</th><th>${t('active')}</th><th>${t('certifiedQ')}</th></tr>
-      ${data.map(j => `<tr data-code="${esc(j.code)}"><td>${esc(j.code)}</td><td>${esc(j.description)}</td>
+    body = `<div class="card" style="background:#f8f9fb">
+        <b>${t('addCostCode')}</b>
+        <label>${t('job')}</label><select id="acj">${data.filter(j => j.is_active).map(j => `<option value="${esc(j.code)}">${esc(j.code)} – ${esc(j.description)}</option>`).join('')}</select>
+        <div class="row"><div><label>${t('code')}</label><input id="acc" placeholder="1000.0010"></div><div style="flex:2"><label>${t('description')}</label><input id="acd"></div></div>
+        <button class="btn primary" id="acb" style="margin-top:10px">${t('add')}</button></div>
+      <div class="scroll"><table><tr><th>#</th><th>${t('job')}</th><th>${t('active')}</th><th>${t('certifiedQ')}</th></tr>
+      ${data.map(j => `<tr data-code="${esc(j.code)}"><td>${esc(j.code)}</td><td>${esc(j.description)}<br><span class="muted">${codesFor(j.code).length} ${t('costCode').toLowerCase()}</span></td>
         <td><input type="checkbox" class="ja" ${j.is_active ? 'checked' : ''} style="width:22px;height:22px"></td>
         <td><input type="checkbox" class="jc" ${j.certified_payroll ? 'checked' : ''} style="width:22px;height:22px"></td></tr>`).join('')}
       </table></div>`;
@@ -453,6 +496,7 @@ async function renderOffice(flash = '') {
   const err = m => document.getElementById('e').innerHTML = `<div class="err">${esc(m)}</div>`;
   const dl = document.getElementById('dl');
   if (dl && ot === 'payroll') dl.onclick = () => csv(S._rows, [['employee_code','Employee'],['last_name','Last'],['first_name','First'],['regular_hours','Regular'],['overtime_hours','OT'],['total_hours','Total'],['unapproved_shifts','Unapproved']], `payroll_${S.week}.csv`);
+  if (dl && ot === 'jobcost') dl.onclick = () => csv(S._rows, [['job_code','Job'],['job_description','Job name'],['cost_code','Cost code'],['cost_code_description','Cost code name'],['workers','Workers'],['labor_hours','Labor hours'],['unapproved_shifts','Unapproved']], `jobcost_${S.week}.csv`);
   if (dl && ot === 'certified') dl.onclick = () => csv(S._rows, [['job_code','Job'],['job_description','Job name'],['employee_code','Employee'],['last_name','Last'],['first_name','First'],['mon','Mon'],['tue','Tue'],['wed','Wed'],['thu','Thu'],['fri','Fri'],['sat','Sat'],['sun','Sun'],['total_hours','Total']], `certified_${S.week}.csv`);
   const apr = document.getElementById('apr');
   if (apr) apr.onclick = async () => {
@@ -472,6 +516,15 @@ async function renderOffice(flash = '') {
     const { error } = await sb.rpc('tc_set_job', { p_code: tr.dataset.code, p_active: tr.querySelector('.ja').checked, p_certified: tr.querySelector('.jc').checked });
     error ? err(errText(error)) : (document.getElementById('e').innerHTML = `<div class="msg">${t('saved')}</div>`);
   });
+  const acb = document.getElementById('acb');
+  if (acb) acb.onclick = async () => {
+    const job = document.getElementById('acj').value, code = document.getElementById('acc').value.trim(), desc = document.getElementById('acd').value.trim();
+    if (!job || !code || !desc) return;
+    const { error } = await sb.rpc('tc_add_cost_code', { p_job: job, p_code: code, p_description: desc });
+    if (error) return err(errText(error));
+    const { data: ccs } = await sb.from('tc_cost_codes').select('*').order('code').limit(5000); S.costCodes = ccs || [];
+    renderOffice(t('saved'));
+  };
   document.querySelectorAll('[data-pin]').forEach(b => b.onclick = async () => {
     const pin = prompt(`${b.dataset.pin} — ${t('newPin')}`);
     if (pin === null) return;
