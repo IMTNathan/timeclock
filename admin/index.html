@@ -215,6 +215,7 @@ function statusTags(s) {
   else if (s.status === 'rejected') t.push(`<span class="tag bad" title="${esc(s.decline_reason)}">Declined: ${esc(s.decline_reason || '')}</span>`);
   else t.push('<span class="tag warn">To approve</span>');
   if (s.long_shift) t.push('<span class="tag bad" title="Longer than a normal day — probably a forgotten clock-out">Very long shift</span>');
+  if ((S.emps || []).some(e => e.code === s.employee_code && e.is_training)) t.push('<span class="tag" title="Not counted in payroll or job cost. Removed at 6 PM each day.">Training</span>');
   if (s.manual) t.push(`<span class="tag" title="Entered by ${esc(s.created_by || '')}, not punched on a phone">Added by hand</span>`);
   else if (S.settings && S.settings.require_photo && !s.has_photo_in) t.push('<span class="tag warn" title="No photo was taken at clock-in">No photo</span>');
   if (s.worker_response === 'declined') t.push(`<span class="tag warn" title="${esc(s.worker_note)}">Worker declined: ${esc(s.worker_note || '')}</span>`);
@@ -480,7 +481,7 @@ PAGE.employees = async main => {
     <div class="card" style="padding:0"><div class="scroll"><table class="cards t-emp">
       <thead><tr><th>#</th><th>Name</th><th>Role</th><th>Language</th><th>Active</th><th>Sign-in</th><th>Last sign-in / phone</th><th></th></tr></thead>
       <tbody>${list.map(e => `<tr data-code="${esc(e.code)}" data-name="${esc((e.first_name + ' ' + e.last_name + ' ' + e.code).toLowerCase())}">
-        <td>${esc(e.code)}</td><td><b>${esc(e.last_name)}, ${esc(e.first_name)}</b>${e.is_breakglass ? ' <span class="tag warn">Emergency login</span>' : ''}</td>
+        <td>${esc(e.code)}</td><td><b>${esc(e.last_name)}, ${esc(e.first_name)}</b>${e.is_breakglass ? ' <span class="tag warn">Emergency login</span>' : ''}${e.is_training ? ' <span class="tag" title="Punches are left out of payroll and job cost, and removed at 6 PM each day">Training login</span>' : ''}</td>
         <td><select class="er" ${e.is_breakglass ? 'disabled' : ''}>${roles.map(r => `<option ${e.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></td>
         <td>${e.is_breakglass ? '' : `<select class="el"><option value="es" ${e.language === 'es' ? 'selected' : ''}>Spanish</option><option value="en" ${e.language === 'en' ? 'selected' : ''}>English</option></select>`}</td>
         <td>${e.is_breakglass ? '<span class="tag ok">Always on</span>' : `<input type="checkbox" class="ea" ${e.is_active ? 'checked' : ''}>`}</td>
