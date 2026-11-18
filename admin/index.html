@@ -215,7 +215,8 @@ function statusTags(s) {
   if (s.outside_in) t.push(`<span class="tag bad">In outside ${fDist(s.in_distance_m)}</span>`);
   if (s.outside_out) t.push(`<span class="tag bad">Out outside ${fDist(s.out_distance_m)}</span>`);
   if (s.outside_checks > 0) t.push(`<span class="tag warn">Left site ${fDist(s.outside_check_max_m)}</span>`);
-  if (s.clock_out && s.job_has_no_location) t.push('<span class="tag" title="Job has no geofence">No job location</span>');
+  if (s.geofence_exempt) t.push('<span class="tag" title="This cost code is not checked against the job site">No geofence</span>');
+  else if (s.clock_out && s.job_has_no_location) t.push('<span class="tag" title="Job has no geofence">No job location</span>');
   return t.join(' ');
 }
 const needsReview = s => s.clock_out && s.status !== 'approved';
@@ -683,7 +684,7 @@ function costCodeDialog(job) {
     <div class="toolbar"><input id="nc" placeholder="Code e.g. 1000.0010" style="width:160px"><input id="nd" placeholder="Description" style="flex:1"><button class="btn primary" id="addc">Add</button></div>
     <div id="de"></div>
     <div style="max-height:55vh;overflow:auto"><table><thead><tr><th>Code</th><th>Description</th><th>Unit</th><th>Active</th></tr></thead>
-      <tbody>${list.map(c => `<tr><td>${esc(c.code)}</td><td>${esc(c.description)}</td><td>${esc(c.unit || '')}</td><td><input type="checkbox" data-cca="${esc(c.code)}" ${c.is_active ? 'checked' : ''}></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No cost codes. Crews clock in to this job without one.</td></tr>'}</tbody></table></div>
+      <tbody>${list.map(c => `<tr><td>${esc(c.code)}</td><td>${esc(c.description)}${c.no_geofence ? ' <span class="tag" title="Time on this code is not checked against the job site">No geofence</span>' : ''}</td><td>${esc(c.unit || '')}</td><td><input type="checkbox" data-cca="${esc(c.code)}" ${c.is_active ? 'checked' : ''}></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No cost codes. Crews clock in to this job without one.</td></tr>'}</tbody></table></div>
     <div class="toolbar" style="margin-top:16px;justify-content:flex-end"><button class="btn" id="c">Close</button></div>`, true);
   document.getElementById('c').onclick = () => { closeDlg(); render(); };
   document.getElementById('addc').onclick = async () => {

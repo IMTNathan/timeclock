@@ -285,6 +285,8 @@ function renderLogin(step = 'code', code = '') {
 function outsideMsg(rows, field) {
   const r = Array.isArray(rows) ? rows[0] : rows; if (!r) return '';
   const j = S.jobs.find(x => x.code === r.job_code); const d = r[field];
+  const cc = (S.costCodes || []).find(c => c.job_code === r.job_code && c.code === r.cost_code);
+  if (cc && cc.no_geofence) return '';   // e.g. Parts Runner: location is recorded but not checked against the job site
   return (j && d != null && d > j.radius_m) ? ' — ' + T[lang].outsideNote(fmtDist(d)) : '';
 }
 // Error box for a punch with no location. iPhone home-screen web apps get their own fix; the small last line is for troubleshooting.
