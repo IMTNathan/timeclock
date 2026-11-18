@@ -28,7 +28,7 @@
   .big { width:100%; border:0; border-radius:16px; padding:28px 10px; font-size:26px; font-weight:700; color:#fff; }
   .big.in { background:var(--green); } .big.out { background:var(--red); }
   .big:disabled { opacity:.5; }
-  .btn { border:1px solid var(--line); background:#fff; border-radius:10px; padding:10px 14px; font-size:15px; }
+  .btn { border:1px solid var(--line); background:#fff; color:#111; border-radius:10px; padding:10px 14px; font-size:15px; }
   .btn.primary { background:var(--navy); color:#fff; border-color:var(--navy); }
   .btn.green { background:var(--green); color:#fff; border-color:var(--green); }
   .btn.red { background:var(--red); color:#fff; border-color:var(--red); }
@@ -37,7 +37,7 @@
   .shift .body { flex:1; min-width:0; }
   .shift .hrs { font-size:20px; font-weight:700; white-space:nowrap; }
   label { display:block; font-size:14px; color:var(--muted); margin:10px 0 4px; }
-  input, select { width:100%; font-size:18px; padding:12px; border:1px solid #bdbdbd; border-radius:10px; background:#fff; }
+  input, select { color:#111; width:100%; font-size:18px; padding:12px; border:1px solid #bdbdbd; border-radius:10px; background:#fff; }
   .muted { color:var(--muted); font-size:14px; }
   .status { font-size:20px; font-weight:600; margin:4px 0; }
   .timer { font-size:40px; font-weight:700; font-variant-numeric:tabular-nums; margin:6px 0 12px; }
@@ -52,7 +52,7 @@
   .err { background:#fce8e6; color:var(--red); padding:10px 12px; border-radius:10px; margin:10px 0; }
   .msg { background:#e6f4ea; color:var(--green); padding:10px 12px; border-radius:10px; margin:10px 0; }
   .keypad { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px; }
-  .keypad button { font-size:26px; padding:16px 0; border-radius:12px; border:1px solid var(--line); background:#fff; }
+  .keypad button { font-size:26px; padding:16px 0; border-radius:12px; border:1px solid var(--line); background:#fff; color:#111; }
   .dots { display:flex; justify-content:center; gap:12px; margin:14px 0 4px; }
   .dots span { width:16px; height:16px; border-radius:50%; border:2px solid var(--navy); }
   .dots span.f { background:var(--navy); }
@@ -61,7 +61,7 @@
   dialog::backdrop { background:rgba(0,0,0,.4); }
   .hide { display:none !important; }
   .subtabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
-  .subtabs button { border:1px solid var(--line); background:#fff; border-radius:999px; padding:7px 12px; font-size:14px; }
+  .subtabs button { border:1px solid var(--line); background:#fff; color:#111; border-radius:999px; padding:7px 12px; font-size:14px; }
   .subtabs button.on { background:var(--navy); color:#fff; border-color:var(--navy); }
 </style>
 </head>
@@ -459,7 +459,7 @@ async function renderCrew(flash = '') {
             <button class="btn" data-edit="${s.id}" style="margin-top:8px;padding:6px 12px">${t('edit')}</button>
           </div></div>`).join('')}
       </div>
-      <div class="row" style="margin-top:14px"><button class="btn green" style="padding:14px;font-size:17px" id="apr">${t('approve')}</button><button class="btn red" style="padding:14px;font-size:17px" id="dec">${t('decline')}</button></div>`
+      ${rows.some(s => s.clock_out && s.status !== 'approved') ? `<div class="row" style="margin-top:14px"><button class="btn green" style="padding:14px;font-size:17px" id="apr">${t('approve')}</button><button class="btn red" style="padding:14px;font-size:17px" id="dec">${t('decline')}</button></div>` : ''}`
       : `<div class="muted">${t('nothing')}</div>`}
       <div id="e"></div>
     </div>`;
@@ -585,7 +585,7 @@ async function renderOffice(flash = '') {
         <td>${fmtDate(s.work_date)}</td><td>${esc(s.first_name)} ${esc(s.last_name)}</td><td>${esc(s.job_code || '—')}${s.cost_code ? `<br><span class="muted">${esc(s.cost_code)}</span>` : ''}</td>
         <td>${fmtTime(s.clock_in)}</td><td>${s.missed_clockout ? `<span class="tag bad">${t('missed')}</span>` : fmtTime(s.clock_out)}</td>
         <td class="n">${s.clock_out ? h(s.net_hours) : '—'}</td><td>${s.status === 'rejected' || s.worker_response === 'declined' ? statusTag(s) : ''}${geoTags(s)}</td><td><button class="btn" data-edit="${s.id}">${t('edit')}</button></td></tr>`).join('') || `<tr><td colspan="9" class="muted">—</td></tr>`}
-      </table></div><div class="row" style="margin-top:12px"><button class="btn green" id="apr">${t('approve')}</button><button class="btn red" id="dec">${t('decline')}</button></div>`;
+      </table></div>${data.some(s => s.clock_out) ? `<div class="row" style="margin-top:12px"><button class="btn green" id="apr">${t('approve')}</button><button class="btn red" id="dec">${t('decline')}</button></div>` : ''}`;
   }
 
   if (ot === 'certified') {
