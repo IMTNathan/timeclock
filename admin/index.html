@@ -185,7 +185,7 @@ const fTime = iso => iso ? new Date(iso).toLocaleTimeString('en-US', { hour:'num
 const h = n => (Math.round((+n || 0) * 100) / 100).toFixed(2);
 const fDist = m => { if (m == null) return ''; const ft = m * 3.28084; return ft < 1000 ? `${Math.round(ft / 10) * 10} ft` : `${(ft / 5280).toFixed(1)} mi`; };
 const toLocalInput = iso => { if (!iso) return ''; const d = new Date(iso); return `${dstr(d)}T${z(d.getHours())}:${z(d.getMinutes())}`; };
-const ERR = { bad_times:'Check the times: clock-out must be after clock-in, not in the future, and under 24 hours.', overlaps_existing:'That person already has time during those hours.', foreman_not_on_job:'Not allowed on that job.', already_clocked_in:'Already clocked in.', not_allowed:'Not allowed.', reason_required:'A reason is required.', pin_must_be_6_digits:'PIN must be 6 digits.', cost_code_required:'This job needs a cost code.', cost_code_not_on_job:'That cost code is not on this job.', employee_not_found:'Employee not found.' };
+const ERR = { bad_times:'Check the times: clock-out must be after clock-in, not in the future, and under 24 hours.', overlaps_existing:'That person already has time during those hours.', foreman_not_on_job:'Not allowed on that job.', already_clocked_in:'Already clocked in.', not_allowed:'Not allowed.', reason_required:'A reason is required.', pin_must_be_4_digits:'PIN must be 4 digits.', cost_code_required:'This job needs a cost code.', cost_code_not_on_job:'That cost code is not on this job.', employee_not_found:'Employee not found.' };
 const errText = e => { const m = e?.message || String(e); for (const k in ERR) if (m.includes(k)) return ERR[k]; return /fetch|network/i.test(m) ? 'Connection problem — try again.' : m; };
 function csv(rows, cols, name) {
   const body = [cols.map(c => c[1]).join(','), ...rows.map(r => cols.map(c => `"${String(typeof c[0] === 'function' ? c[0](r) : r[c[0]] ?? '').replace(/"/g, '""')}"`).join(','))].join('\r\n');
@@ -600,13 +600,13 @@ async function historyDialog(s) {
 function pinDialog(code) {
   const e = S.emps.find(x => x.code === code);
   openDlg(`<h1>${e.has_pin ? 'Reset' : 'Set'} PIN</h1><div class="sub">${esc(e.first_name)} ${esc(e.last_name)} · ${esc(code)}</div>
-    <label class="f">New 6-digit PIN</label><div class="toolbar"><input id="pp" inputmode="numeric" maxlength="6" style="width:140px;font-size:20px;letter-spacing:4px"><button class="btn" id="gen">Random</button></div>
+    <label class="f">New 4-digit PIN</label><div class="toolbar"><input id="pp" inputmode="numeric" maxlength="4" style="width:140px;font-size:20px;letter-spacing:4px"><button class="btn" id="gen">Random</button></div>
     <div class="muted">Give the PIN to the employee in person. They sign in with employee number ${esc(code)} and this PIN.</div><div id="de"></div>
     <div class="toolbar" style="margin-top:16px;justify-content:flex-end"><button class="btn" id="c">Cancel</button><button class="btn primary" id="ok">Save PIN</button></div>`);
-  document.getElementById('gen').onclick = () => { const a = new Uint32Array(1); crypto.getRandomValues(a); document.getElementById('pp').value = String(a[0] % 1000000).padStart(6, '0'); };
+  document.getElementById('gen').onclick = () => { const a = new Uint32Array(1); crypto.getRandomValues(a); document.getElementById('pp').value = String(a[0] % 10000).padStart(4, '0'); };
   document.getElementById('c').onclick = closeDlg;
   document.getElementById('ok').onclick = async () => {
-    const pin = document.getElementById('pp').value.trim(); if (!/^\d{6}$/.test(pin)) return dErr('PIN must be 6 digits.');
+    const pin = document.getElementById('pp').value.trim(); if (!/^\d{4}$/.test(pin)) return dErr('PIN must be 4 digits.');
     const { error } = await sb.rpc('tc_set_pin', { p_code: code, p_pin: pin });
     if (error) return dErr(errText(error));
     closeDlg(); S.flash = `PIN saved for ${e.first_name} ${e.last_name} (${code}).`; render();

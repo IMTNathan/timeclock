@@ -88,7 +88,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: tr
 // ---------------- text ----------------
 const T = {
   es: {
-    appTitle:'IMT Reloj', empNum:'Número de empleado', pin:'PIN (6 dígitos)', signIn:'Entrar', next:'Siguiente', back:'Atrás',
+    appTitle:'IMT Reloj', empNum:'Número de empleado', pin:'PIN (4 dígitos)', signIn:'Entrar', next:'Siguiente', back:'Atrás',
     badLogin:'Número o PIN incorrecto.', logout:'Salir', clock:'Reloj', crew:'Cuadrilla', office:'Oficina',
     clockedOut:'Fuera del reloj', clockedIn:'En el reloj', since:'Desde', job:'Trabajo', pickJob:'Escoja el trabajo',
     clockIn:'ENTRADA', clockOut:'SALIDA', changeJob:'Cambiar de trabajo', thisWeek:'Esta semana', hours:'horas',
@@ -100,11 +100,11 @@ const T = {
     selectAll:'Seleccionar', week:'Semana', reg:'Regular', ot:'Extra', unapproved:'Sin aprobar',
     payroll:'Nómina', certified:'Nómina certificada', pending:'Por aprobar', employees:'Empleados', jobs:'Trabajos',
     download:'Descargar CSV', setPin:'Poner PIN', role:'Puesto', language:'Idioma', active:'Activo', hasPin:'Tiene PIN',
-    newPin:'PIN nuevo (6 dígitos)', pinSaved:'PIN guardado.', saved:'Guardado.', certifiedQ:'Nómina certificada',
+    newPin:'PIN nuevo (4 dígitos)', pinSaved:'PIN guardado.', saved:'Guardado.', certifiedQ:'Nómina certificada',
     prev:'‹ Anterior', nextW:'Siguiente ›', noSignal:'Sin señal. Intente de nuevo cuando tenga señal.',
     already_clocked_in:'Ya está en el reloj.', not_clocked_in:'No está en el reloj.', job_not_active:'Ese trabajo no está activo.',
     not_an_employee:'Su usuario no está activo. Hable con la oficina.', not_allowed:'No tiene permiso.',
-    pin_must_be_6_digits:'El PIN debe tener 6 números.', reason_required:'Escriba la razón.',
+    pin_must_be_4_digits:'El PIN debe tener 4 números.', reason_required:'Escriba la razón.',
     worker:'Trabajador', foreman:'Capataz', officeRole:'Oficina', admin:'Admin', mon:'Lun', tue:'Mar', wed:'Mié', thu:'Jue', fri:'Vie', sat:'Sáb', sun:'Dom',
     stillIn:'Todavía en el reloj', approvedCount:n=>`${n} aprobado(s).`, search:'Buscar…',
     costCode:'Código de costo', pickCostCode:'Escoja el código de costo', cost_code_required:'Escoja el código de costo.', cost_code_not_on_job:'Ese código no es de este trabajo.',
@@ -116,7 +116,7 @@ const T = {
     bad_times:'Revise las horas: la salida debe ser después de la entrada, no en el futuro, y menos de 24 horas.', foreman_not_on_job:'Solo puede agregar horas en un trabajo donde usted trabajó ese día. Pida a la oficina.', overlaps_existing:'Esa persona ya tiene horas en ese horario.', employee_not_found:'Empleado no encontrado.'
   },
   en: {
-    appTitle:'IMT Timeclock', empNum:'Employee number', pin:'PIN (6 digits)', signIn:'Sign in', next:'Next', back:'Back',
+    appTitle:'IMT Timeclock', empNum:'Employee number', pin:'PIN (4 digits)', signIn:'Sign in', next:'Next', back:'Back',
     badLogin:'Wrong number or PIN.', logout:'Sign out', clock:'Clock', crew:'Crew', office:'Office',
     clockedOut:'Clocked out', clockedIn:'Clocked in', since:'Since', job:'Job', pickJob:'Pick the job',
     clockIn:'CLOCK IN', clockOut:'CLOCK OUT', changeJob:'Change job', thisWeek:'This week', hours:'hours',
@@ -128,11 +128,11 @@ const T = {
     selectAll:'Select', week:'Week', reg:'Regular', ot:'OT', unapproved:'Unapproved',
     payroll:'Payroll', certified:'Certified payroll', pending:'To approve', employees:'Employees', jobs:'Jobs',
     download:'Download CSV', setPin:'Set PIN', role:'Role', language:'Language', active:'Active', hasPin:'Has PIN',
-    newPin:'New PIN (6 digits)', pinSaved:'PIN saved.', saved:'Saved.', certifiedQ:'Certified payroll',
+    newPin:'New PIN (4 digits)', pinSaved:'PIN saved.', saved:'Saved.', certifiedQ:'Certified payroll',
     prev:'‹ Prev', nextW:'Next ›', noSignal:'No signal. Try again when you have signal.',
     already_clocked_in:'Already clocked in.', not_clocked_in:'Not clocked in.', job_not_active:'That job is not active.',
     not_an_employee:'Your login is not active. Talk to the office.', not_allowed:'Not allowed.',
-    pin_must_be_6_digits:'PIN must be 6 numbers.', reason_required:'Enter a reason.',
+    pin_must_be_4_digits:'PIN must be 4 numbers.', reason_required:'Enter a reason.',
     worker:'Worker', foreman:'Foreman', officeRole:'Office', admin:'Admin', mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun',
     stillIn:'Still clocked in', approvedCount:n=>`${n} approved.`, search:'Search…',
     costCode:'Cost code', pickCostCode:'Pick the cost code', cost_code_required:'Pick the cost code.', cost_code_not_on_job:'That cost code is not on this job.',
@@ -161,7 +161,7 @@ function h(n) { return (Math.round((Number(n) || 0) * 100) / 100).toFixed(2); }
 function toLocalInput(iso) { if (!iso) return ''; const d = new Date(iso); const z = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; }
 function errText(e) {
   const m = (e && (e.message || e.error_description || String(e))) || '';
-  for (const k of ['already_clocked_in','not_clocked_in','job_not_active','not_an_employee','not_allowed','pin_must_be_6_digits','reason_required','cost_code_required','cost_code_not_on_job','location_required','bad_times','foreman_not_on_job','overlaps_existing','employee_not_found']) if (m.includes(k)) return t(k);
+  for (const k of ['already_clocked_in','not_clocked_in','job_not_active','not_an_employee','not_allowed','pin_must_be_4_digits','reason_required','cost_code_required','cost_code_not_on_job','location_required','bad_times','foreman_not_on_job','overlaps_existing','employee_not_found']) if (m.includes(k)) return t(k);
   if (/fetch|network|Failed/i.test(m)) return t('noSignal');
   return m;
 }
@@ -247,7 +247,7 @@ function renderLogin(step = 'code', code = '') {
   $app.innerHTML = `<div class="card" style="text-align:center">
     <div class="muted">${t('empNum')}: <b>${esc(code)}</b></div>
     <div class="status">${t('pin')}</div>
-    <div class="dots" id="dots">${'<span></span>'.repeat(6)}</div>
+    <div class="dots" id="dots">${'<span></span>'.repeat(4)}</div>
     <div id="e"></div>
     <div class="keypad">${[1,2,3,4,5,6,7,8,9].map(n => `<button data-k="${n}">${n}</button>`).join('')}
       <button data-k="back">←</button><button data-k="0">0</button><button data-k="x">✕</button></div>
@@ -256,9 +256,9 @@ function renderLogin(step = 'code', code = '') {
   document.getElementById('chg').onclick = () => renderLogin('code', code);
   document.querySelectorAll('.keypad button').forEach(b => b.onclick = async () => {
     const k = b.dataset.k;
-    if (k === 'back') pin = pin.slice(0, -1); else if (k === 'x') pin = ''; else if (pin.length < 6) pin += k;
+    if (k === 'back') pin = pin.slice(0, -1); else if (k === 'x') pin = ''; else if (pin.length < 4) pin += k;
     dots();
-    if (pin.length === 6) {
+    if (pin.length === 4) {
       const email = 'e' + code.toLowerCase().replace(/[^a-z0-9]/g, '') + '@timeclock.imtconstruction.com';
       const { error } = await sb.auth.signInWithPassword({ email, password: pin });
       if (error) { pin = ''; dots(); document.getElementById('e').innerHTML = `<div class="err">${/fetch|network/i.test(error.message) ? t('noSignal') : t('badLogin')}</div>`; return; }
@@ -299,7 +299,7 @@ function ask({ title, label = '', input = null, okText, danger = false, emptyMsg
     const dlg = document.getElementById('dlg');
     document.getElementById('dlgBody').innerHTML = `
       <div class="status">${esc(title)}</div>
-      ${input ? `<label>${esc(label)}</label><input id="askIn" ${input === 'pin' ? 'inputmode="numeric" maxlength="6" autocomplete="off"' : 'maxlength="200"'}>` : (label ? `<div class="muted" style="margin-top:6px">${esc(label)}</div>` : '')}
+      ${input ? `<label>${esc(label)}</label><input id="askIn" ${input === 'pin' ? 'inputmode="numeric" maxlength="4" autocomplete="off"' : 'maxlength="200"'}>` : (label ? `<div class="muted" style="margin-top:6px">${esc(label)}</div>` : '')}
       <div id="askErr"></div>
       <div class="row" style="margin-top:16px"><button class="btn" id="askNo">${t('cancel')}</button><button class="btn ${danger ? 'red' : 'primary'}" id="askOk">${esc(okText || t('yes'))}</button></div>`;
     let settled = false;
@@ -697,7 +697,7 @@ async function renderOffice(flash = '') {
     renderOffice(t('saved'));
   };
   document.querySelectorAll('[data-pin]').forEach(b => b.onclick = async () => {
-    const pin = await ask({ title: `${b.dataset.pin} — ${t('setPin')}`, label: t('newPin'), input: 'pin', okText: t('save'), emptyMsg: t('pin_must_be_6_digits') });
+    const pin = await ask({ title: `${b.dataset.pin} — ${t('setPin')}`, label: t('newPin'), input: 'pin', okText: t('save'), emptyMsg: t('pin_must_be_4_digits') });
     if (!pin) return;
     const { error } = await sb.rpc('tc_set_pin', { p_code: b.dataset.pin, p_pin: pin });
     error ? err(errText(error)) : renderOffice(t('pinSaved'));
