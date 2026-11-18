@@ -144,7 +144,7 @@
     table.t-time tbody tr:not(.empty) td:nth-child(11) { grid-area:5/2/6/6; margin-top:4px; }
     /* employees: name + number / role + language / active + PIN */
     table.t-emp tbody tr { grid-template-columns:minmax(0,1fr) minmax(0,1fr) 104px; }
-    table.t-emp td:nth-child(7) .btn { width:100%; padding-left:4px; padding-right:4px; }
+    table.t-emp td:nth-child(8) .btn { width:100%; padding-left:4px; padding-right:4px; }
     table.t-emp td:nth-child(2) { grid-area:1/1/2/3; font-size:16px; }
     table.t-emp td:nth-child(1) { grid-area:1/3; color:var(--muted); }
     table.t-emp td:nth-child(3) { grid-area:2/1; }
@@ -152,7 +152,9 @@
     table.t-emp td:nth-child(5) { grid-area:3/1; display:flex; align-items:center; gap:6px; }
     table.t-emp td:nth-child(5)::before { content:'Active'; color:var(--muted); font-size:13px; }
     table.t-emp td:nth-child(6) { grid-area:3/2; }
-    table.t-emp td:nth-child(7) { grid-area:3/3; }
+    table.t-emp td:nth-child(8) { grid-area:3/3; }
+    table.t-emp td:nth-child(7) { grid-area:4/1/5/4; color:var(--muted); font-size:13px; }
+    table.t-emp td:nth-child(7)::before { content:'Last sign-in: '; }
     /* jobs: name / location + cost codes / switches */
     table.t-jobs tbody tr { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
     table.t-jobs td:nth-child(1) { grid-area:1/1/2/3; }
@@ -453,19 +455,22 @@ PAGE.employees = async main => {
   const roles = ['worker','foreman','office','admin'];
   const list = S.emps.filter(e => !e.is_breakglass).concat(S.emps.filter(e => e.is_breakglass));
   const bg = S.emps.find(e => e.is_breakglass), iAmAdmin = S.me.role === 'admin';
-  let bgUsed = null; if (bg) { const r = await sb.rpc('tc_breakglass_last_used'); bgUsed = r.data || null; }
-  main.innerHTML = `<h1>Employees</h1><div class="sub">Changes save as soon as you change a field. Employee numbers should match ComputerEase.</div>${flash()}
+  const lastIn = {}; { const r = await sb.rpc('tc_last_signins'); (r.data || []).forEach(x => { lastIn[x.code] = x.last_sign_in; }); }
+  const when = iso => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const bgUsed = bg ? lastIn[bg.code] || null : null;
+  main.innerHTML = `<h1>Employees</h1><div class="sub">Changes save as soon as you change a field. Employee numbers should match ComputerEase. Last sign-in is the last time the PIN was entered; phones stay signed in between uses.</div>${flash()}
     <div class="toolbar"><input id="eq" placeholder="Search" style="width:220px"><span class="grow"></span><button class="btn primary" id="add">Add employee</button></div>
     <div class="card" style="padding:0"><div class="scroll"><table class="cards t-emp">
-      <thead><tr><th>#</th><th>Name</th><th>Role</th><th>Language</th><th>Active</th><th>Sign-in</th><th></th></tr></thead>
+      <thead><tr><th>#</th><th>Name</th><th>Role</th><th>Language</th><th>Active</th><th>Sign-in</th><th>Last sign-in</th><th></th></tr></thead>
       <tbody>${list.map(e => `<tr data-code="${esc(e.code)}" data-name="${esc((e.first_name + ' ' + e.last_name + ' ' + e.code).toLowerCase())}">
         <td>${esc(e.code)}</td><td><b>${esc(e.last_name)}, ${esc(e.first_name)}</b>${e.is_breakglass ? ' <span class="tag warn">Emergency login</span>' : ''}</td>
         <td><select class="er" ${e.is_breakglass ? 'disabled' : ''}>${roles.map(r => `<option ${e.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></td>
         <td><select class="el"><option value="es" ${e.language === 'es' ? 'selected' : ''}>Spanish</option><option value="en" ${e.language === 'en' ? 'selected' : ''}>English</option></select></td>
         <td><input type="checkbox" class="ea" ${e.is_active ? 'checked' : ''} ${e.is_breakglass && !iAmAdmin ? 'disabled' : ''}></td>
         <td>${e.is_breakglass ? (e.has_pin ? '<span class="tag ok">Password set</span>' : '<span class="tag">No password</span>') : e.has_pin ? '<span class="tag ok">PIN set</span>' : '<span class="tag">No PIN</span>'}</td>
+        <td class="ls">${lastIn[e.code] ? esc(when(lastIn[e.code])) : e.has_pin ? 'Never' : '—'}</td>
         <td>${e.is_breakglass ? `<button class="btn sm" data-bg="${esc(e.code)}" ${iAmAdmin ? '' : 'disabled'}>${e.has_pin ? 'Reset password' : 'Set password'}</button>` : `<button class="btn sm" data-pin="${esc(e.code)}">${e.has_pin ? 'Reset PIN' : 'Set PIN'}</button>`}</td></tr>`).join('')}</tbody></table></div></div>
-    ${bg ? `<div class="sub" id="bgNote" style="margin-top:12px"><b>Emergency login.</b> For when the normal admin login cannot be used. Sign in on this site with employee number <b>${esc(bg.code)}</b> and its password. Only an admin can set the password. ${bg.has_pin ? `Last used: <b>${bgUsed ? esc(new Date(bgUsed).toLocaleString()) : 'never'}</b>.` : 'No password is set yet, so it cannot be used.'}</div>` : ''}`;
+    ${bg ? `<div class="sub" id="bgNote" style="margin-top:12px"><b>Emergency login.</b> For when the normal admin login cannot be used. Sign in on this site with employee number <b>${esc(bg.code)}</b> and its password. Only an admin can set the password. ${bg.has_pin ? `Last used: <b>${bgUsed ? esc(when(bgUsed)) : 'never'}</b>.` : 'No password is set yet, so it cannot be used.'}</div>` : ''}`;
   document.getElementById('eq').oninput = e => { const q = e.target.value.toLowerCase(); main.querySelectorAll('tr[data-name]').forEach(tr => tr.classList.toggle('hide', !tr.dataset.name.includes(q))); };
   main.querySelectorAll('tr[data-code] select, tr[data-code] .ea').forEach(el => el.onchange = async () => {
     const tr = el.closest('tr');
