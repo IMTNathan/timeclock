@@ -8,14 +8,15 @@
 <title>IMT Timeclock · Admin</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-  :root { --navy:#1f3a5f; --navy2:#2a4b78; --green:#1e8e3e; --red:#c5221f; --amber:#b06000; --bg:#f3f4f6; --card:#fff; --line:#e2e5ea; --muted:#5f6b7a; --hi:#eef3fa; }
+  :root { --navy:#000; --navy2:#262626; --green:#1e8e3e; --red:#c5221f; --amber:#b06000; --bg:#f2f2f2; --card:#fff; --line:#dedede; --muted:#5a5a5a; --hi:#ececec; }
   * { box-sizing:border-box; }
   html, body { margin:0; height:100%; }
   body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:#111; font-size:14px; }
   .layout { display:grid; grid-template-columns:220px 1fr; min-height:100vh; }
   aside { background:var(--navy); color:#fff; display:flex; flex-direction:column; }
-  aside .brand { padding:18px 18px 14px; font-weight:700; font-size:16px; border-bottom:1px solid rgba(255,255,255,.12); }
-  aside .brand small { display:block; font-weight:400; opacity:.7; font-size:12px; margin-top:2px; }
+  aside .brand { padding:16px 16px 12px; font-weight:700; font-size:16px; border-bottom:1px solid rgba(255,255,255,.18); text-align:center; }
+  aside .brand img { width:100%; max-width:188px; height:auto; display:block; margin:0 auto 8px; }
+  aside .brand small { display:block; font-weight:600; opacity:.85; font-size:12px; letter-spacing:.14em; text-transform:uppercase; }
   aside nav { padding:8px 0; flex:1; }
   aside nav a { display:flex; justify-content:space-between; align-items:center; padding:10px 18px; color:rgba(255,255,255,.85); text-decoration:none; cursor:pointer; }
   aside nav a:hover { background:var(--navy2); }
@@ -39,20 +40,20 @@
   th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.02em; position:sticky; top:0; background:#fff; z-index:1; cursor:default; }
   th.sort { cursor:pointer; } th.sort:hover { color:var(--navy); }
   td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
-  tr:hover td { background:#fafbfc; }
+  tr:hover td { background:#f7f7f7; }
   tr.sel td { background:var(--hi); }
   tfoot td { font-weight:700; border-top:2px solid var(--line); }
-  .btn { border:1px solid #c9ced6; background:#fff; border-radius:8px; padding:7px 12px; font-size:14px; cursor:pointer; }
+  .btn { border:1px solid #bdbdbd; background:#fff; border-radius:8px; padding:7px 12px; font-size:14px; cursor:pointer; }
   .btn:hover { border-color:var(--navy); }
   .btn.primary { background:var(--navy); color:#fff; border-color:var(--navy); }
   .btn.green { background:var(--green); color:#fff; border-color:var(--green); }
   .btn.red { background:var(--red); color:#fff; border-color:var(--red); }
   .btn.sm { padding:4px 9px; font-size:13px; }
   .btn:disabled { opacity:.45; cursor:default; }
-  input, select { font-size:14px; padding:7px 9px; border:1px solid #c9ced6; border-radius:8px; background:#fff; }
+  input, select { font-size:14px; padding:7px 9px; border:1px solid #bdbdbd; border-radius:8px; background:#fff; }
   input[type=checkbox] { width:16px; height:16px; }
   label.f { display:block; font-size:12px; color:var(--muted); margin:10px 0 3px; }
-  .tag { display:inline-block; font-size:12px; padding:1px 8px; border-radius:999px; background:#eef1f5; color:var(--muted); margin:1px 2px 1px 0; white-space:nowrap; }
+  .tag { display:inline-block; font-size:12px; padding:1px 8px; border-radius:999px; background:#ededed; color:var(--muted); margin:1px 2px 1px 0; white-space:nowrap; }
   .tag.ok { background:#e6f4ea; color:var(--green); } .tag.warn { background:#fef0e0; color:var(--amber); } .tag.bad { background:#fce8e6; color:var(--red); }
   .muted { color:var(--muted); }
   .msg { background:#e6f4ea; color:var(--green); padding:9px 12px; border-radius:8px; margin-bottom:12px; }
@@ -64,6 +65,8 @@
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .login { max-width:360px; margin:12vh auto; background:#fff; border-radius:14px; padding:26px; box-shadow:0 2px 10px rgba(0,0,0,.08); }
   .login h1 { margin-bottom:14px; }
+  .login .lg { background:#000; margin:-26px -26px 20px; padding:24px; border-radius:14px 14px 0 0; text-align:center; }
+  .login .lg img { width:230px; max-width:100%; height:auto; }
   .login input { width:100%; font-size:16px; padding:10px; }
   #map, #dmap { height:420px; border-radius:10px; }
   .split { display:grid; grid-template-columns:1.1fr 1fr; gap:16px; }
@@ -144,7 +147,7 @@ async function loadRef() {
   S.jobs = jobs; S.ccs = ccs; S.emps = emps;
 }
 function renderLogin(msg = '') {
-  $root.innerHTML = `<div class="login"><h1>IMT Timeclock · Admin</h1>
+  $root.innerHTML = `<div class="login"><div class="lg"><img src="../logo.png" alt="IMT Construction"></div><h1>Timeclock · Admin</h1>
     ${msg ? `<div class="err">${esc(msg)}</div>` : ''}
     <label class="f">Employee number</label><input id="code" autocomplete="username" value="${esc(localStorage.getItem('lastCode') || '')}">
     <label class="f">PIN</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password">
@@ -167,7 +170,7 @@ const PAGES = [['dashboard','Dashboard'],['time','Time review'],['payroll','Week
 async function render() {
   const { count } = await sb.from('tc_shifts').select('id', { count:'exact', head:true }).neq('status', 'approved').not('clock_out', 'is', null);
   $root.innerHTML = `<div class="layout">
-    <aside><div class="brand">IMT Timeclock<small>Admin</small></div>
+    <aside><div class="brand"><img src="../logo.png" alt="IMT Construction"><small>Timeclock admin</small></div>
       <nav>${PAGES.map(([k, l]) => `<a class="${S.page === k ? 'on' : ''}" data-p="${k}">${l}${k === 'time' && count ? `<span class="badge">${count}</span>` : ''}</a>`).join('')}</nav>
       <div class="who">${esc(S.me.first_name)} ${esc(S.me.last_name)} · ${esc(S.me.role)}<br><a id="out">Sign out</a> · <a href="../" target="_blank">Phone app</a></div></aside>
     <main id="main"></main></div>`;
@@ -222,7 +225,7 @@ PAGE.dashboard = async main => {
     const map = L.map('dmap').setView([32.95, -96.95], 9);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(map);
     const pts = [];
-    S.jobs.filter(j => j.latitude != null && j.is_active).forEach(j => { L.circle([j.latitude, j.longitude], { radius:j.radius_m, color:'#1f3a5f', weight:1, fillOpacity:.06 }).addTo(map).bindTooltip(`${j.code} – ${j.description}`); });
+    S.jobs.filter(j => j.latitude != null && j.is_active).forEach(j => { L.circle([j.latitude, j.longitude], { radius:j.radius_m, color:'#000', weight:1, fillOpacity:.06 }).addTo(map).bindTooltip(`${j.code} – ${j.description}`); });
     todayRows.filter(s => s.in_lat != null).forEach(s => {
       const bad = s.outside_in;
       L.circleMarker([s.in_lat, s.in_lng], { radius:7, color: bad ? '#c5221f' : '#1e8e3e', fillOpacity:.8 }).addTo(map)
@@ -401,7 +404,7 @@ PAGE.jobs = async main => {
     const map = L.map('map').setView([32.95, -96.95], 9);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(map);
     const pts = [];
-    S.jobs.filter(j => j.latitude != null).forEach(j => { L.circle([j.latitude, j.longitude], { radius:j.radius_m, color: j.is_active ? '#1f3a5f' : '#999' }).addTo(map).bindTooltip(`${j.code} – ${j.description}`); pts.push([j.latitude, j.longitude]); });
+    S.jobs.filter(j => j.latitude != null).forEach(j => { L.circle([j.latitude, j.longitude], { radius:j.radius_m, color: j.is_active ? '#000' : '#999' }).addTo(map).bindTooltip(`${j.code} – ${j.description}`); pts.push([j.latitude, j.longitude]); });
     if (pts.length) map.fitBounds(pts, { padding:[30, 30], maxZoom:14 });
   }
 };
@@ -555,7 +558,7 @@ function locationDialog(job) {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(map);
   let pos = job.latitude != null ? L.latLng(job.latitude, job.longitude) : null, mk = null, ci = null;
   const radM = () => Math.max(30, Math.round((+document.getElementById('radn').value || 1000) / 3.28084));
-  const draw = () => { if (!pos) return; mk ? mk.setLatLng(pos) : (mk = L.marker(pos, { draggable:true }).addTo(map)).on('dragend', e => { pos = e.target.getLatLng(); draw(); }); ci ? ci.setLatLng(pos).setRadius(radM()) : ci = L.circle(pos, { radius:radM(), color:'#1f3a5f' }).addTo(map); };
+  const draw = () => { if (!pos) return; mk ? mk.setLatLng(pos) : (mk = L.marker(pos, { draggable:true }).addTo(map)).on('dragend', e => { pos = e.target.getLatLng(); draw(); }); ci ? ci.setLatLng(pos).setRadius(radM()) : ci = L.circle(pos, { radius:radM(), color:'#000' }).addTo(map); };
   draw();
   map.on('click', e => { pos = e.latlng; draw(); });
   document.getElementById('rad').oninput = e => { document.getElementById('radn').value = e.target.value; draw(); };
