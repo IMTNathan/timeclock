@@ -109,7 +109,7 @@ const T = {
     stillIn:'Todavía en el reloj', approvedCount:n=>`${n} aprobado(s).`, search:'Buscar…',
     costCode:'Código de costo', pickCostCode:'Escoja el código de costo', cost_code_required:'Escoja el código de costo.', cost_code_not_on_job:'Ese código no es de este trabajo.',
     jobCost:'Costo por trabajo', laborHours:'Horas', workers:'Trabajadores', addCostCode:'Agregar código de costo', code:'Código', description:'Descripción', add:'Agregar', noCode:'(sin código)',
-    location_required:'Se necesita su ubicación para marcar.', locHelp:'Active la ubicación del teléfono y permita que este sitio la use (iPhone: Ajustes › Privacidad › Localización › Safari; Android: toque el candado junto a la dirección › Permisos › Ubicación). Luego intente de nuevo.',
+    location_required:'Se necesita su ubicación para marcar.', locHelp:'La ubicación está bloqueada para esta app. iPhone: Ajustes › Privacidad y seguridad › Localización › Sitios web de Safari › Al usar la app. Android: toque el candado junto a la dirección › Permisos › Ubicación › Permitir. Luego cierre la app, ábrala de nuevo y toque Permitir cuando el teléfono pregunte.', locSlow:'El teléfono no dio una ubicación. Revise que la ubicación esté activada (iPhone: Ajustes › Privacidad y seguridad › Localización › Sitios web de Safari › Al usar la app), salga al aire libre o acérquese a una ventana e intente de nuevo.',
     accept:'Aceptar', decline:'Rechazar', acceptedTag:'Aceptado', declinedByMe:'Usted rechazó', declinedByForeman:'Rechazado', workerDeclined:'Trabajador rechazó', declineReason:'¿Qué está mal con estas horas?', declineReasonLead:'Razón para rechazar (el trabajador la verá)', declinedCount:n=>`${n} rechazado(s).`, myShifts:'Mis horas', reviewHours:'Revise sus horas:',
     outside:'Fuera del sitio', outsideIn:'Entrada fuera del sitio', outsideOut:'Salida fuera del sitio', outsideCheck:'Salió del sitio', outsideNote:d=>`Está a ${d} del sitio de trabajo. Su capataz lo verá.`, setLocHere:'Fijar ubicación del trabajo aquí', setLocConfirm:j=>`¿Fijar la ubicación del trabajo ${j} donde está usted ahora?`, locSaved:'Ubicación guardada.', location:'Ubicación', radius:'Radio (pies)', searchAddr:'Buscar dirección', mapHelp:'Busque la dirección o toque el mapa para poner el centro del sitio.', notSet:'Sin ubicación', setBy:'puesta por', noJobLoc:'Trabajo sin ubicación',
     addShift:'Agregar horas', addShiftHelp:'Para alguien que no pudo marcar (teléfono descargado, sin señal). Queda marcado como agregado a mano.', employee:'Empleado', addedByHand:'Agregado a mano', longShift:'Turno muy largo', openNotCounted:'abierto, no cuenta',
@@ -137,7 +137,7 @@ const T = {
     stillIn:'Still clocked in', approvedCount:n=>`${n} approved.`, search:'Search…',
     costCode:'Cost code', pickCostCode:'Pick the cost code', cost_code_required:'Pick the cost code.', cost_code_not_on_job:'That cost code is not on this job.',
     jobCost:'Job cost', laborHours:'Hours', workers:'Workers', addCostCode:'Add cost code', code:'Code', description:'Description', add:'Add', noCode:'(no code)',
-    location_required:'Your location is needed to punch.', locHelp:'Turn on location on the phone and allow this site to use it (iPhone: Settings › Privacy › Location Services › Safari; Android: tap the lock next to the address › Permissions › Location). Then try again.',
+    location_required:'Your location is needed to punch.', locHelp:'Location is blocked for this app. iPhone: Settings › Privacy & Security › Location Services › Safari Websites › While Using the App. Android: tap the lock next to the address › Permissions › Location › Allow. Then close the app, open it again, and tap Allow when the phone asks.', locSlow:'The phone did not give a location. Check that location is turned on (iPhone: Settings › Privacy & Security › Location Services › Safari Websites › While Using the App), step outside or near a window, and try again.',
     accept:'Accept', decline:'Decline', acceptedTag:'Accepted', declinedByMe:'You declined', declinedByForeman:'Declined', workerDeclined:'Worker declined', declineReason:'What is wrong with these hours?', declineReasonLead:'Reason for declining (the worker will see it)', declinedCount:n=>`${n} declined.`, myShifts:'My hours', reviewHours:'Check your hours:',
     outside:'Outside job site', outsideIn:'Clock-in outside site', outsideOut:'Clock-out outside site', outsideCheck:'Left the site', outsideNote:d=>`You are ${d} from the job site. Your foreman will see this.`, setLocHere:'Set job location here', setLocConfirm:j=>`Set the location of job ${j} to where you are standing now?`, locSaved:'Location saved.', location:'Location', radius:'Radius (feet)', searchAddr:'Search address', mapHelp:'Search the address or tap the map to set the center of the site.', notSet:'No location', setBy:'set by', noJobLoc:'Job has no location',
     addShift:'Add hours', addShiftHelp:'For someone who could not punch (dead phone, no signal). It is marked as added by hand.', employee:'Employee', addedByHand:'Added by hand', longShift:'Very long shift', openNotCounted:'open, not counted',
@@ -370,7 +370,7 @@ async function renderClock(flash = '') {
   if (jobEl) wireCostCode(jobEl, ccEl, document.getElementById('ccWrap'), open ? open.cost_code : (localStorage.getItem('lastCC') || ''));
   const pickedCC = () => { const v = ccEl && !document.getElementById('ccWrap').classList.contains('hide') ? ccEl.value : ''; return v || null; };
   const busy = (btn, on) => { if (btn) { btn.disabled = on; if (on) btn.textContent = t('gettingGps'); } };
-  const noLoc = (btn, label) => { busy(btn, false); btn.textContent = label; document.getElementById('e').innerHTML = `<div class="err"><b>${t('location_required')}</b><br>${t('locHelp')}</div>`; };
+  const noLoc = (btn, label, g) => { busy(btn, false); btn.textContent = label; document.getElementById('e').innerHTML = `<div class="err"><b>${t('location_required')}</b><br>${t(g && g.denied ? 'locHelp' : 'locSlow')}</div>`; };
 
   if (open) {
     const tick = () => { const s = Math.max(0, (Date.now() - new Date(open.clock_in)) / 1000); const el = document.getElementById('timer'); if (el) el.textContent = `${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,'0')}`; };
@@ -381,7 +381,7 @@ async function renderClock(flash = '') {
       if (!await ask({ title: t('confirmOut'), okText: t('clockOut'), danger: true })) return;
       busy(e.target, true);
       const g = await getGps();
-      if (g.lat == null) return noLoc(e.target, t('clockOut'));
+      if (g.lat == null) return noLoc(e.target, t('clockOut'), g);
       const { data: row, error } = await sb.rpc('tc_clock_out', { p_lat: g.lat ?? null, p_lng: g.lng ?? null });
       if (error) { busy(e.target, false); e.target.textContent = t('clockOut'); return err(errText(error)); }
       renderClock(`${t('done')} ✓` + outsideMsg(row, 'out_distance_m'));
@@ -392,7 +392,7 @@ async function renderClock(flash = '') {
       if (codesFor(job).length && !cc) return err(t('cost_code_required'));
       busy(e.target, true);
       const g = await getGps();
-      if (g.lat == null) return noLoc(e.target, t('changeJob'));
+      if (g.lat == null) return noLoc(e.target, t('changeJob'), g);
       const { data: swRow, error } = await sb.rpc('tc_switch_job', { p_job: job, p_cost_code: cc, p_lat: g.lat ?? null, p_lng: g.lng ?? null });
       if (error) { busy(e.target, false); e.target.textContent = t('changeJob'); return err(errText(error)); }
       localStorage.setItem('lastJob', job); localStorage.setItem('lastCC', cc || ''); renderClock(`${t('done')} ✓` + outsideMsg(swRow, 'in_distance_m'));
@@ -405,7 +405,7 @@ async function renderClock(flash = '') {
       if (codesFor(job).length && !cc) return err(t('cost_code_required'));
       busy(e.target, true);
       const g = await getGps();
-      if (g.lat == null) return noLoc(e.target, t('clockIn'));
+      if (g.lat == null) return noLoc(e.target, t('clockIn'), g);
       const { data: inRow, error } = await sb.rpc('tc_clock_in', { p_job: job, p_cost_code: cc, p_lat: g.lat ?? null, p_lng: g.lng ?? null });
       if (error) { busy(e.target, false); e.target.textContent = t('clockIn'); return err(errText(error)); }
       localStorage.setItem('lastJob', job); localStorage.setItem('lastCC', cc || ''); renderClock(`${t('done')} ✓` + outsideMsg(inRow, 'in_distance_m'));
@@ -479,7 +479,7 @@ async function renderCrew(flash = '') {
     const job = document.getElementById('slj').value; if (!job || !await ask({ title: T[lang].setLocConfirm(job), okText: t('save') })) return;
     e.target.disabled = true; e.target.textContent = t('gettingGps');
     const g = await getGps();
-    if (g.lat == null) { e.target.disabled = false; e.target.textContent = t('setLocHere'); return document.getElementById('e').innerHTML = `<div class="err"><b>${t('location_required')}</b><br>${t('locHelp')}</div>`; }
+    if (g.lat == null) { e.target.disabled = false; e.target.textContent = t('setLocHere'); return document.getElementById('e').innerHTML = `<div class="err"><b>${t('location_required')}</b><br>${t(g.denied ? 'locHelp' : 'locSlow')}</div>`; }
     const { error } = await sb.rpc('tc_set_job_location', { p_job: job, p_lat: g.lat, p_lng: g.lng });
     if (error) { e.target.disabled = false; e.target.textContent = t('setLocHere'); return document.getElementById('e').innerHTML = `<div class="err">${esc(errText(error))}</div>`; }
     await reloadJobs(); renderCrew(t('locSaved'));
