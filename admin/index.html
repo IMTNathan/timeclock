@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <link rel="icon" href="../icon-192.png">
 <title>IMT Timeclock · Admin</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="../vendor/leaflet/leaflet.css">
 <style>
   :root { --navy:#000; --navy2:#262626; --green:#1e8e3e; --red:#c5221f; --amber:#b06000; --bg:#f2f2f2; --card:#fff; --line:#dedede; --muted:#5a5a5a; --hi:#ececec; }
   * { box-sizing:border-box; }
@@ -80,9 +80,10 @@
 <body>
 <div id="root"></div>
 <dialog id="dlg"><div id="dlgBody"></div></dialog>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../vendor/leaflet/leaflet.js"></script>
+<script src="../vendor/supabase.js"></script>
 <script type="module">
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
+const { createClient } = window.supabase;
 const sb = createClient('https://qjruoobyecsgxxgxbkja.supabase.co', 'sb_publishable_-KhWyifowntUK9kRHHGCxA_mOfuWMxA', { auth: { persistSession: true, autoRefreshToken: true } });
 
 // ---------- helpers ----------
@@ -97,7 +98,7 @@ const fTime = iso => iso ? new Date(iso).toLocaleTimeString('en-US', { hour:'num
 const h = n => (Math.round((+n || 0) * 100) / 100).toFixed(2);
 const fDist = m => { if (m == null) return ''; const ft = m * 3.28084; return ft < 1000 ? `${Math.round(ft / 10) * 10} ft` : `${(ft / 5280).toFixed(1)} mi`; };
 const toLocalInput = iso => { if (!iso) return ''; const d = new Date(iso); return `${dstr(d)}T${z(d.getHours())}:${z(d.getMinutes())}`; };
-const ERR = { already_clocked_in:'Already clocked in.', not_allowed:'Not allowed.', reason_required:'A reason is required.', pin_must_be_6_digits:'PIN must be 6 digits.', cost_code_required:'This job needs a cost code.', cost_code_not_on_job:'That cost code is not on this job.', employee_not_found:'Employee not found.' };
+const ERR = { bad_times:'Check the times: clock-out must be after clock-in, not in the future, and under 24 hours.', overlaps_existing:'That person already has time during those hours.', foreman_not_on_job:'Not allowed on that job.', already_clocked_in:'Already clocked in.', not_allowed:'Not allowed.', reason_required:'A reason is required.', pin_must_be_6_digits:'PIN must be 6 digits.', cost_code_required:'This job needs a cost code.', cost_code_not_on_job:'That cost code is not on this job.', employee_not_found:'Employee not found.' };
 const errText = e => { const m = e?.message || String(e); for (const k in ERR) if (m.includes(k)) return ERR[k]; return /fetch|network/i.test(m) ? 'Connection problem — try again.' : m; };
 function csv(rows, cols, name) {
   const body = [cols.map(c => c[1]).join(','), ...rows.map(r => cols.map(c => `"${String(typeof c[0] === 'function' ? c[0](r) : r[c[0]] ?? '').replace(/"/g, '""')}"`).join(','))].join('\r\n');
@@ -118,6 +119,8 @@ function statusTags(s) {
   else if (s.status === 'approved') t.push('<span class="tag ok">Approved</span>');
   else if (s.status === 'rejected') t.push(`<span class="tag bad" title="${esc(s.decline_reason)}">Declined: ${esc(s.decline_reason || '')}</span>`);
   else t.push('<span class="tag warn">To approve</span>');
+  if (s.long_shift) t.push('<span class="tag bad" title="Longer than a normal day — probably a forgotten clock-out">Very long shift</span>');
+  if (s.manual) t.push(`<span class="tag" title="Entered by ${esc(s.created_by || '')}, not punched on a phone">Added by hand</span>`);
   if (s.worker_response === 'declined') t.push(`<span class="tag warn" title="${esc(s.worker_note)}">Worker declined: ${esc(s.worker_note || '')}</span>`);
   if (s.worker_response === 'accepted') t.push('<span class="tag ok">Worker accepted</span>');
   if (s.outside_in) t.push(`<span class="tag bad">In outside ${fDist(s.in_distance_m)}</span>`);
@@ -156,7 +159,7 @@ function renderLogin(msg = '') {
   const go = async () => {
     const code = document.getElementById('code').value.trim(), pin = document.getElementById('pin').value.trim();
     if (!code || !pin) return;
-    const { error } = await sb.auth.signInWithPassword({ email: 'e' + code.toLowerCase().replace(/[^a-z0-9]/g, '') + '@imt-timeclock.app', password: pin });
+    const { error } = await sb.auth.signInWithPassword({ email: 'e' + code.toLowerCase().replace(/[^a-z0-9]/g, '') + '@timeclock.imtconstruction.com', password: pin });
     if (error) return document.getElementById('e').innerHTML = `<div class="err" style="margin-top:12px">Wrong employee number or PIN.</div>`;
     localStorage.setItem('lastCode', code); boot();
   };
@@ -196,7 +199,7 @@ PAGE.dashboard = async main => {
     all(() => sb.from('tc_shifts').select('*').eq('work_date', today)),
     all(() => sb.from('tc_shifts').select('*').is('clock_out', null)),
     all(() => sb.from('tc_shifts').select('*').neq('status', 'approved').not('clock_out', 'is', null))]);
-  const onClock = open.filter(s => !s.missed_clockout), missed = open.filter(s => s.missed_clockout);
+  const onClock = open.filter(s => !s.missed_clockout), missed = open.filter(s => s.missed_clockout).concat(review.filter(s => s.long_shift));
   const declined = review.filter(s => s.status === 'rejected' || s.worker_response === 'declined');
   const outside = todayRows.filter(s => s.outside_in || s.outside_out || s.outside_checks > 0);
   const people = new Set(todayRows.map(s => s.employee_code));
@@ -243,7 +246,7 @@ PAGE.time = async main => {
   let view = rows.filter(s =>
     (F.status === 'all' || (F.status === 'review' && (needsReview(s) || !s.clock_out)) || (F.status === 'approved' && s.status === 'approved')
       || (F.status === 'declined' && (s.status === 'rejected' || s.worker_response === 'declined'))
-      || (F.status === 'outside' && (s.outside_in || s.outside_out || s.outside_checks > 0)) || (F.status === 'missed' && s.missed_clockout))
+      || (F.status === 'outside' && (s.outside_in || s.outside_out || s.outside_checks > 0)) || (F.status === 'missed' && (s.missed_clockout || s.long_shift)))
     && (!F.emp || s.employee_code === F.emp) && (!F.job || s.job_code === F.job)
     && (!q || `${s.first_name} ${s.last_name} ${s.job_code} ${s.cost_code || ''} ${s.cost_code_description || ''}`.toLowerCase().includes(q)));
   const { col, dir } = S.sort;
@@ -255,14 +258,14 @@ PAGE.time = async main => {
   main.innerHTML = `<h1>Time review</h1><div class="sub">Approve, decline or fix shifts. Select rows with the checkboxes, then use the buttons.</div>${flash()}
     <div class="toolbar">${weekBar()}</div>
     <div class="toolbar">
-      <select id="fs">${[['review','Needs review'],['all','All shifts'],['approved','Approved'],['declined','Declined'],['outside','Outside site'],['missed','Missed clock-out']].map(([v, l]) => `<option value="${v}" ${F.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <select id="fs">${[['review','Needs review'],['all','All shifts'],['approved','Approved'],['declined','Declined'],['outside','Outside site'],['missed','Missed clock-out / very long']].map(([v, l]) => `<option value="${v}" ${F.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <select id="fe"><option value="">All employees</option>${empOpts.map(([c, n]) => `<option value="${c}" ${F.emp === c ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
       <select id="fj"><option value="">All jobs</option>${jobOpts.map(j => `<option value="${esc(j)}" ${F.job === j ? 'selected' : ''}>${esc(jobLabel(j))}</option>`).join('')}</select>
       <input id="fq" placeholder="Search name, job, cost code" value="${esc(F.q)}" style="width:220px">
       <span class="grow"></span>
       <span class="muted" id="selc">0 selected</span>
       <button class="btn green" id="apr" disabled>Approve</button><button class="btn red" id="dec" disabled>Decline</button>
-      <button class="btn" id="dl">Export CSV</button>
+      <button class="btn primary" id="addsh">Add shift</button><button class="btn" id="dl">Export CSV</button>
     </div>
     <div class="card" style="padding:0"><div class="scroll"><table>
       <thead><tr><th><input type="checkbox" id="ckall"></th>${th('work_date','Date')}${th('last_name','Employee')}${th('job_code','Job')}${th('cost_code','Cost code')}${th('clock_in','In')}${th('clock_out','Out')}${th('lunch_hours','Lunch','n')}${th('net_hours','Hours','n')}<th>Status / flags</th><th></th></tr></thead>
@@ -297,9 +300,10 @@ PAGE.time = async main => {
     const { data: n, error } = await sb.rpc('tc_decline', { p_ids: sel(), p_reason: reason });
     S.flash = error ? '!' + errText(error) : `${n} shift(s) declined.`; render();
   });
-  document.getElementById('dl').onclick = () => csv(view, [['work_date','Date'],['employee_code','Employee #'],['last_name','Last'],['first_name','First'],['job_code','Job'],['cost_code','Cost code'],['cost_code_description','Cost code name'],[r => fTime(r.clock_in),'In'],[r => fTime(r.clock_out),'Out'],['lunch_hours','Lunch'],['net_hours','Hours'],['status','Status'],['worker_response','Worker'],['worker_note','Worker note'],['decline_reason','Decline reason'],['in_distance_m','In distance (m)'],['out_distance_m','Out distance (m)']], `time_${S.week}.csv`);
+  document.getElementById('dl').onclick = () => csv(view, [['work_date','Date'],['employee_code','Employee #'],['last_name','Last'],['first_name','First'],['job_code','Job'],['cost_code','Cost code'],['cost_code_description','Cost code name'],[r => fTime(r.clock_in),'In'],[r => fTime(r.clock_out),'Out'],['lunch_hours','Lunch'],['net_hours','Hours'],['status','Status'],['worker_response','Worker'],['worker_note','Worker note'],['decline_reason','Decline reason'],['in_distance_m','In distance (m)'],['out_distance_m','Out distance (m)'],[r => r.manual ? 'yes' : '','Added by hand'],[r => r.long_shift ? 'yes' : '','Very long']], `time_${S.week}.csv`);
   main.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editDialog(rows.find(s => s.id === b.dataset.edit)));
   main.querySelectorAll('[data-hist]').forEach(b => b.onclick = () => historyDialog(rows.find(s => s.id === b.dataset.hist)));
+  document.getElementById('addsh').onclick = () => addShiftDialog();
 };
 
 PAGE.payroll = async main => {
@@ -309,14 +313,14 @@ PAGE.payroll = async main => {
   const days = [0,1,2,3,4,5,6].map(i => addDays(S.week, i));
   const tot = k => rows.reduce((a, r) => a + +r[k], 0);
   const open = rows.filter(r => r.unapproved_shifts > 0).length;
-  main.innerHTML = `<h1>Weekly payroll</h1><div class="sub">Regular and overtime hours to enter in ComputerEase. Overtime is hours over 40 for the week; 30-minute lunch already deducted.</div>${flash()}
+  main.innerHTML = `<h1>Weekly payroll</h1><div class="sub">Regular and overtime hours to enter in ComputerEase. Overtime is hours over 40 for the week; 30-minute lunch already deducted. Shifts still open are left out until they are closed.</div>${flash()}
     <div class="toolbar">${weekBar()}<span class="grow"></span>${open ? `<span class="tag warn">${open} employee(s) still have unapproved shifts</span>` : rows.length ? '<span class="tag ok">All shifts approved</span>' : ''}<button class="btn" id="dl">Export CSV</button><button class="btn" onclick="print()">Print</button></div>
     <div class="card" style="padding:0"><div class="scroll"><table>
       <thead><tr><th>#</th><th>Employee</th>${days.map(d => `<th class="n">${fDate(d).split(',')[0]}<br><span class="muted">${d.slice(5)}</span></th>`).join('')}<th class="n">Regular</th><th class="n">OT</th><th class="n">Total</th><th>Status</th></tr></thead>
       <tbody>${rows.map(r => `<tr><td>${esc(r.employee_code)}</td><td class="nowrap"><b>${esc(r.last_name)}, ${esc(r.first_name)}</b></td>
         ${days.map(d => `<td class="n">${per[r.employee_code]?.[d] ? h(per[r.employee_code][d]) : ''}</td>`).join('')}
         <td class="n">${h(r.regular_hours)}</td><td class="n"><b>${+r.overtime_hours ? h(r.overtime_hours) : ''}</b></td><td class="n"><b>${h(r.total_hours)}</b></td>
-        <td>${r.has_missed_clockout ? '<span class="tag bad">Missed clock-out</span> ' : ''}${r.unapproved_shifts > 0 ? `<span class="tag warn">${r.unapproved_shifts} unapproved</span> ` : '<span class="tag ok">Approved</span> '}${r.worker_declined + r.foreman_declined > 0 ? `<span class="tag bad">${r.worker_declined + r.foreman_declined} declined</span> ` : ''}${r.outside_shifts > 0 ? `<span class="tag warn">${r.outside_shifts} outside</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="13" class="muted" style="padding:20px">No time this week.</td></tr>'}</tbody>
+        <td>${r.has_missed_clockout ? '<span class="tag bad">Missed clock-out</span> ' : ''}${r.open_shifts > 0 ? `<span class="tag" title="Shifts still open are not in the totals">${r.open_shifts} open, not counted</span> ` : ''}${r.long_shifts > 0 ? `<span class="tag bad">${r.long_shifts} very long</span> ` : ''}${r.unapproved_shifts > 0 ? `<span class="tag warn">${r.unapproved_shifts} unapproved</span> ` : '<span class="tag ok">Approved</span> '}${r.worker_declined + r.foreman_declined > 0 ? `<span class="tag bad">${r.worker_declined + r.foreman_declined} declined</span> ` : ''}${r.outside_shifts > 0 ? `<span class="tag warn">${r.outside_shifts} outside</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="13" class="muted" style="padding:20px">No time this week.</td></tr>'}</tbody>
       <tfoot><tr><td></td><td>${rows.length} employee(s)</td>${days.map(() => '<td></td>').join('')}<td class="n">${h(tot('regular_hours'))}</td><td class="n">${h(tot('overtime_hours'))}</td><td class="n">${h(tot('total_hours'))}</td><td></td></tr></tfoot>
     </table></div></div>`;
   wireWeek();
@@ -445,6 +449,37 @@ function editDialog(s) {
     const { error } = await sb.rpc('tc_edit_entry', { p_id: s.id, p_clock_in: new Date(ci).toISOString(), p_clock_out: co ? new Date(co).toISOString() : null, p_job: document.getElementById('ej').value, p_cost_code: hidden ? null : (document.getElementById('ecc').value || null), p_reason: reason });
     if (error) return dErr(errText(error));
     closeDlg(); S.flash = 'Shift updated. The worker will be asked to review it again.'; render();
+  };
+}
+
+function addShiftDialog() {
+  const ccOpts = job => { const l = S.ccs.filter(c => c.job_code === job && c.is_active); return l.length ? `<option value="">—</option>` + l.map(c => `<option value="${esc(c.code)}">${esc(c.code)} – ${esc(c.description)}</option>`).join('') : ''; };
+  const emps = S.emps.filter(e => e.is_active).sort((a, b) => (a.last_name + a.first_name).localeCompare(b.last_name + b.first_name));
+  const day = dstr();
+  openDlg(`<h1>Add shift</h1><div class="sub">For someone who could not punch (dead phone, no signal). It is marked "Added by hand" and still needs approval.</div>
+    <label class="f">Employee</label><select id="nsEmp" style="width:100%"><option value="">—</option>${emps.map(e => `<option value="${esc(e.code)}">${esc(e.last_name)}, ${esc(e.first_name)} (${esc(e.code)})</option>`).join('')}</select>
+    <label class="f">Job</label><select id="nsJob" style="width:100%">${S.jobs.filter(j => j.is_active).map(j => `<option value="${esc(j.code)}">${esc(j.code)} – ${esc(j.description)}</option>`).join('')}</select>
+    <div id="nsCcWrap"><label class="f">Cost code</label><select id="nsCc" style="width:100%"></select></div>
+    <div class="grid2"><div><label class="f">Clock in</label><input type="datetime-local" id="nsIn" style="width:100%" value="${day}T07:00"></div>
+      <div><label class="f">Clock out</label><input type="datetime-local" id="nsOut" style="width:100%" value="${day}T17:30"></div></div>
+    <label class="f">Reason (kept in the history)</label><input id="nsReason" style="width:100%" maxlength="200">
+    <div id="de"></div>
+    <div class="toolbar" style="margin-top:16px;justify-content:flex-end"><button class="btn" id="c">Cancel</button><button class="btn primary" id="ok">Add shift</button></div>`);
+  const $ = id => document.getElementById(id);
+  const sync = () => { const html = ccOpts($('nsJob').value); $('nsCc').innerHTML = html; $('nsCcWrap').classList.toggle('hide', !html); };
+  sync(); $('nsJob').onchange = sync;
+  $('c').onclick = closeDlg;
+  $('ok').onclick = async () => {
+    const emp = $('nsEmp').value, reason = $('nsReason').value.trim(), ci = $('nsIn').value, co = $('nsOut').value;
+    if (!emp) return dErr('Pick an employee.');
+    if (!ci || !co) return dErr('Enter clock-in and clock-out times.');
+    if (new Date(co) <= new Date(ci)) return dErr('Clock-out must be after clock-in.');
+    if (!reason) return dErr('Enter a reason.');
+    const cc = $('nsCcWrap').classList.contains('hide') ? null : ($('nsCc').value || null);
+    const { error } = await sb.rpc('tc_add_entry', { p_employee: emp, p_job: $('nsJob').value, p_cost_code: cc, p_clock_in: new Date(ci).toISOString(), p_clock_out: new Date(co).toISOString(), p_reason: reason });
+    if (error) return dErr(errText(error));
+    const e = S.emps.find(x => x.code === emp);
+    closeDlg(); S.week = weekStart(ci.slice(0, 10)); S.filters.status = 'all'; S.flash = `Shift added for ${e.first_name} ${e.last_name}.`; render();
   };
 }
 
