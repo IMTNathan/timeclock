@@ -28,6 +28,11 @@
   .btn { border:1px solid var(--line); background:#fff; border-radius:10px; padding:10px 14px; font-size:15px; }
   .btn.primary { background:var(--navy); color:#fff; border-color:var(--navy); }
   .btn.green { background:var(--green); color:#fff; border-color:var(--green); }
+  .btn.red { background:var(--red); color:#fff; border-color:var(--red); }
+  .shift { display:flex; gap:12px; padding:12px 0; border-top:1px solid var(--line); }
+  .shift:first-child { border-top:0; }
+  .shift .body { flex:1; min-width:0; }
+  .shift .hrs { font-size:20px; font-weight:700; white-space:nowrap; }
   label { display:block; font-size:14px; color:var(--muted); margin:10px 0 4px; }
   input, select { width:100%; font-size:18px; padding:12px; border:1px solid #c9ced6; border-radius:10px; background:#fff; }
   .muted { color:var(--muted); font-size:14px; }
@@ -100,7 +105,8 @@ const T = {
     costCode:'Código de costo', pickCostCode:'Escoja el código de costo', cost_code_required:'Escoja el código de costo.', cost_code_not_on_job:'Ese código no es de este trabajo.',
     jobCost:'Costo por trabajo', laborHours:'Horas', workers:'Trabajadores', addCostCode:'Agregar código de costo', code:'Código', description:'Descripción', add:'Agregar', noCode:'(sin código)',
     location_required:'Se necesita su ubicación para marcar.', locHelp:'Active la ubicación del teléfono y permita que este sitio la use (iPhone: Ajustes › Privacidad › Localización › Safari; Android: toque el candado junto a la dirección › Permisos › Ubicación). Luego intente de nuevo.',
-    accept:'Aceptar', decline:'Rechazar', acceptedTag:'Aceptado', declinedByMe:'Usted rechazó', declinedByForeman:'Rechazado', workerDeclined:'Trabajador rechazó', declineReason:'¿Qué está mal con estas horas?', declineReasonLead:'Razón para rechazar (el trabajador la verá)', declinedCount:n=>`${n} rechazado(s).`, myShifts:'Mis horas', reviewHours:'Revise sus horas:'
+    accept:'Aceptar', decline:'Rechazar', acceptedTag:'Aceptado', declinedByMe:'Usted rechazó', declinedByForeman:'Rechazado', workerDeclined:'Trabajador rechazó', declineReason:'¿Qué está mal con estas horas?', declineReasonLead:'Razón para rechazar (el trabajador la verá)', declinedCount:n=>`${n} rechazado(s).`, myShifts:'Mis horas', reviewHours:'Revise sus horas:',
+    outside:'Fuera del sitio', outsideIn:'Entrada fuera del sitio', outsideOut:'Salida fuera del sitio', outsideCheck:'Salió del sitio', outsideNote:d=>`Está a ${d} del sitio de trabajo. Su capataz lo verá.`, setLocHere:'Fijar ubicación del trabajo aquí', setLocConfirm:j=>`¿Fijar la ubicación del trabajo ${j} donde está usted ahora?`, locSaved:'Ubicación guardada.', location:'Ubicación', radius:'Radio (pies)', searchAddr:'Buscar dirección', mapHelp:'Busque la dirección o toque el mapa para poner el centro del sitio.', notSet:'Sin ubicación', setBy:'puesta por', noJobLoc:'Trabajo sin ubicación'
   },
   en: {
     appTitle:'IMT Timeclock', empNum:'Employee number', pin:'PIN (6 digits)', signIn:'Sign in', next:'Next', back:'Back',
@@ -125,7 +131,8 @@ const T = {
     costCode:'Cost code', pickCostCode:'Pick the cost code', cost_code_required:'Pick the cost code.', cost_code_not_on_job:'That cost code is not on this job.',
     jobCost:'Job cost', laborHours:'Hours', workers:'Workers', addCostCode:'Add cost code', code:'Code', description:'Description', add:'Add', noCode:'(no code)',
     location_required:'Your location is needed to punch.', locHelp:'Turn on location on the phone and allow this site to use it (iPhone: Settings › Privacy › Location Services › Safari; Android: tap the lock next to the address › Permissions › Location). Then try again.',
-    accept:'Accept', decline:'Decline', acceptedTag:'Accepted', declinedByMe:'You declined', declinedByForeman:'Declined', workerDeclined:'Worker declined', declineReason:'What is wrong with these hours?', declineReasonLead:'Reason for declining (the worker will see it)', declinedCount:n=>`${n} declined.`, myShifts:'My hours', reviewHours:'Check your hours:'
+    accept:'Accept', decline:'Decline', acceptedTag:'Accepted', declinedByMe:'You declined', declinedByForeman:'Declined', workerDeclined:'Worker declined', declineReason:'What is wrong with these hours?', declineReasonLead:'Reason for declining (the worker will see it)', declinedCount:n=>`${n} declined.`, myShifts:'My hours', reviewHours:'Check your hours:',
+    outside:'Outside job site', outsideIn:'Clock-in outside site', outsideOut:'Clock-out outside site', outsideCheck:'Left the site', outsideNote:d=>`You are ${d} from the job site. Your foreman will see this.`, setLocHere:'Set job location here', setLocConfirm:j=>`Set the location of job ${j} to where you are standing now?`, locSaved:'Location saved.', location:'Location', radius:'Radius (feet)', searchAddr:'Search address', mapHelp:'Search the address or tap the map to set the center of the site.', notSet:'No location', setBy:'set by', noJobLoc:'Job has no location'
   }
 };
 let lang = localStorage.getItem('lang') || ((navigator.language||'es').startsWith('en') ? 'en' : 'es');
@@ -149,6 +156,7 @@ function errText(e) {
   if (/fetch|network|Failed/i.test(m)) return t('noSignal');
   return m;
 }
+async function reloadJobs() { const { data } = await sb.from('tc_jobs').select('*').order('code'); S.jobs = data || []; }
 function codesFor(job, activeOnly = true) { return S.costCodes.filter(c => c.job_code === job && (!activeOnly || c.is_active)); }
 function ccName(job, code) { if (!code) return ''; const c = S.costCodes.find(x => x.job_code === job && x.code === code); return c ? `${c.code} – ${c.description}` : code; }
 function ccOptions(job, selected, activeOnly = true) {
@@ -159,6 +167,14 @@ function ccOptions(job, selected, activeOnly = true) {
 function wireCostCode(jobSel, ccSel, ccWrap, selected = '', activeOnly = true) {
   const sync = () => { const html = ccOptions(jobSel.value, selected, activeOnly); ccSel.innerHTML = html; ccWrap.classList.toggle('hide', !html); selected = ''; };
   jobSel.addEventListener('change', sync); sync();
+}
+function fmtDist(m) { if (m == null) return ''; const ft = m * 3.28084; return ft < 1000 ? `${Math.round(ft / 10) * 10} ft` : `${(ft / 5280).toFixed(1)} mi`; }
+function geoTags(s) {
+  const out = [];
+  if (s.outside_in) out.push(`<span class="tag bad">${t('outsideIn')} ${fmtDist(s.in_distance_m)}</span>`);
+  if (s.outside_out) out.push(`<span class="tag bad">${t('outsideOut')} ${fmtDist(s.out_distance_m)}</span>`);
+  if (s.outside_checks > 0) out.push(`<span class="tag warn">${t('outsideCheck')} ${fmtDist(s.outside_check_max_m)}</span>`);
+  return out.length ? '<br>' + out.join(' ') : '';
 }
 function jobName(code) { const j = S.jobs.find(x => x.code === code); return j ? `${j.code} – ${j.description}` : (code || '—'); }
 function isLead() { return S.me && ['foreman','office','admin'].includes(S.me.role); }
@@ -245,6 +261,11 @@ function renderLogin(step = 'code', code = '') {
 }
 
 // ---------------- clock (everyone) ----------------
+function outsideMsg(rows, field) {
+  const r = Array.isArray(rows) ? rows[0] : rows; if (!r) return '';
+  const j = S.jobs.find(x => x.code === r.job_code); const d = r[field];
+  return (j && d != null && d > j.radius_m) ? ' — ' + T[lang].outsideNote(fmtDist(d)) : '';
+}
 function getGps() {
   return new Promise(res => {
     if (!navigator.geolocation) return res({});
@@ -267,7 +288,7 @@ async function renderClock(flash = '') {
   const respCell = s => s.status === 'rejected' ? `<span class="tag bad">${t('declinedByForeman')}</span> <span class="muted">${esc(s.decline_reason || '')}</span>`
     : s.worker_response === 'accepted' ? `<span class="tag ok">${t('acceptedTag')}</span>`
     : s.worker_response === 'declined' ? `<span class="tag warn">${t('declinedByMe')}</span> <span class="muted">${esc(s.worker_note || '')}</span>`
-    : `<div class="row" style="margin-top:6px"><button class="btn green" data-acc="${s.id}">✓ ${t('accept')}</button><button class="btn" data-dec="${s.id}" style="color:var(--red)">✗ ${t('decline')}</button></div>`;
+    : `<div class="row" style="margin-top:6px"><button class="btn green" data-acc="${s.id}">✓ ${t('accept')}</button><button class="btn red" data-dec="${s.id}">✗ ${t('decline')}</button></div>`;
   const toReview = closed.filter(s => !s.worker_response && s.status !== 'rejected' && s.status !== 'approved').length;
 
   var err = m => { const el = document.getElementById('e'); if (el) el.innerHTML = `<div class="err">${esc(m)}</div>`; };
@@ -318,14 +339,16 @@ async function renderClock(flash = '') {
   if (open) {
     const tick = () => { const s = Math.max(0, (Date.now() - new Date(open.clock_in)) / 1000); const el = document.getElementById('timer'); if (el) el.textContent = `${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,'0')}`; };
     tick(); S.timer = setInterval(tick, 30000);
+    const last = +localStorage.getItem('lastLocCheck') || 0;
+    if (Date.now() - last > 10 * 60 * 1000) { localStorage.setItem('lastLocCheck', Date.now()); getGps().then(g => { if (g.lat != null) sb.rpc('tc_location_check', { p_lat: g.lat, p_lng: g.lng }); }); }
     document.getElementById('outBtn').onclick = async e => {
       if (!confirm(t('confirmOut'))) return;
       busy(e.target, true);
       const g = await getGps();
       if (g.lat == null) return noLoc(e.target, t('clockOut'));
-      const { error } = await sb.rpc('tc_clock_out', { p_lat: g.lat ?? null, p_lng: g.lng ?? null });
+      const { data: row, error } = await sb.rpc('tc_clock_out', { p_lat: g.lat ?? null, p_lng: g.lng ?? null });
       if (error) { busy(e.target, false); e.target.textContent = t('clockOut'); return err(errText(error)); }
-      renderClock(`${t('done')} ✓`);
+      renderClock(`${t('done')} ✓` + outsideMsg(row, 'out_distance_m'));
     };
     document.getElementById('swBtn').onclick = async e => {
       const job = document.getElementById('job').value, cc = pickedCC();
@@ -334,9 +357,9 @@ async function renderClock(flash = '') {
       busy(e.target, true);
       const g = await getGps();
       if (g.lat == null) return noLoc(e.target, t('changeJob'));
-      const { error } = await sb.rpc('tc_switch_job', { p_job: job, p_cost_code: cc, p_lat: g.lat ?? null, p_lng: g.lng ?? null });
+      const { data: swRow, error } = await sb.rpc('tc_switch_job', { p_job: job, p_cost_code: cc, p_lat: g.lat ?? null, p_lng: g.lng ?? null });
       if (error) { busy(e.target, false); e.target.textContent = t('changeJob'); return err(errText(error)); }
-      localStorage.setItem('lastJob', job); localStorage.setItem('lastCC', cc || ''); renderClock(`${t('done')} ✓`);
+      localStorage.setItem('lastJob', job); localStorage.setItem('lastCC', cc || ''); renderClock(`${t('done')} ✓` + outsideMsg(swRow, 'in_distance_m'));
     };
   } else {
     document.getElementById('inBtn').onclick = async e => {
@@ -347,9 +370,9 @@ async function renderClock(flash = '') {
       busy(e.target, true);
       const g = await getGps();
       if (g.lat == null) return noLoc(e.target, t('clockIn'));
-      const { error } = await sb.rpc('tc_clock_in', { p_job: job, p_cost_code: cc, p_lat: g.lat ?? null, p_lng: g.lng ?? null });
+      const { data: inRow, error } = await sb.rpc('tc_clock_in', { p_job: job, p_cost_code: cc, p_lat: g.lat ?? null, p_lng: g.lng ?? null });
       if (error) { busy(e.target, false); e.target.textContent = t('clockIn'); return err(errText(error)); }
-      localStorage.setItem('lastJob', job); localStorage.setItem('lastCC', cc || ''); renderClock(`${t('done')} ✓`);
+      localStorage.setItem('lastJob', job); localStorage.setItem('lastCC', cc || ''); renderClock(`${t('done')} ✓` + outsideMsg(inRow, 'in_distance_m'));
     };
   }
 }
@@ -369,6 +392,7 @@ function baseTag(s) {
 
 async function renderCrew(flash = '') {
   const d = S.crewDate;
+  { const { data: mine } = await sb.from('tc_shifts').select('job_code').eq('employee_code', S.me.code).is('clock_out', null).maybeSingle(); S.myOpenJob = mine?.job_code || ''; }
   let q = sb.from('tc_shifts').select('*').eq('work_date', d).neq('employee_code', S.me.code).order('last_name');
   const { data, error } = await q;
   if (error) { $app.innerHTML = `<div class="err">${esc(errText(error))}</div>`; return; }
@@ -378,21 +402,26 @@ async function renderCrew(flash = '') {
   $app.innerHTML = `
     ${flash ? `<div class="msg">${esc(flash)}</div>` : ''}
     <div class="card">
+      <details><summary class="muted">📍 ${t('setLocHere')}</summary>
+        <select id="slj" style="margin-top:8px">${S.jobs.filter(j => j.is_active).map(j => `<option value="${esc(j.code)}" ${j.code === S.myOpenJob ? 'selected' : ''}>${esc(j.code)} – ${esc(j.description)}${j.latitude == null ? ' (' + t('notSet') + ')' : ''}</option>`).join('')}</select>
+        <button class="btn primary" style="width:100%;margin-top:8px" id="slb">${t('setLocHere')}</button></details>
+    </div>
+    <div class="card">
       <div class="row"><button class="btn" id="pd" style="flex:0">‹</button><input type="date" id="dt" value="${d}"><button class="btn" id="nd" style="flex:0">›</button></div>
     </div>
     <div class="card">
-      ${rows.length ? `<div class="scroll"><table>
-        <tr><th></th><th>${t('name')}</th><th>${t('job')}</th><th>${t('in')}</th><th>${t('out')}</th><th class="n">${t('total')}</th><th>${t('status')}</th><th></th></tr>
-        ${rows.map(s => `<tr>
-          <td>${s.clock_out && s.status !== 'approved' ? `<input type="checkbox" class="ck" value="${s.id}" ${s.worker_response === 'declined' || s.status === 'rejected' ? '' : 'checked'} style="width:22px;height:22px">` : ''}</td>
-          <td><b>${esc(s.first_name)} ${esc(s.last_name)}</b>${s.work_date !== d ? `<br><span class="muted">${fmtDate(s.work_date)}</span>` : ''}</td>
-          <td>${esc(s.job_code || '—')}${s.cost_code ? `<br><span class="muted">${esc(s.cost_code)} ${esc(s.cost_code_description || '')}</span>` : ''}</td>
-          <td>${fmtTime(s.clock_in)}</td><td>${fmtTime(s.clock_out)}</td>
-          <td class="n">${s.clock_out ? h(s.net_hours) : '—'}</td>
-          <td>${statusTag(s)}</td>
-          <td><button class="btn" data-edit="${s.id}">${t('edit')}</button></td></tr>`).join('')}
-      </table></div>
-      <div class="row" style="margin-top:14px"><button class="btn green" style="padding:14px;font-size:17px" id="apr">${t('approve')}</button><button class="btn" style="padding:14px;font-size:17px;color:var(--red)" id="dec">${t('decline')}</button></div>`
+      ${rows.length ? `<div>
+        ${rows.map(s => `<div class="shift">
+          <div style="flex:0 0 26px;padding-top:2px">${s.clock_out && s.status !== 'approved' ? `<input type="checkbox" class="ck" value="${s.id}" ${s.worker_response === 'declined' || s.status === 'rejected' ? '' : 'checked'} style="width:24px;height:24px">` : ''}</div>
+          <div class="body">
+            <div class="row" style="align-items:flex-start"><div><b>${esc(s.first_name)} ${esc(s.last_name)}</b>${s.work_date !== d ? ` <span class="muted">${fmtDate(s.work_date)}</span>` : ''}</div>
+              <div class="hrs" style="flex:0 0 auto;text-align:right">${s.clock_out ? h(s.net_hours) : '—'}</div></div>
+            <div class="muted">${fmtTime(s.clock_in)} – ${fmtTime(s.clock_out)} · ${esc(s.job_code || '—')}${s.cost_code ? ' / ' + esc(s.cost_code) + ' ' + esc(s.cost_code_description || '') : ''}</div>
+            <div style="margin-top:4px">${statusTag(s)}${geoTags(s)}</div>
+            <button class="btn" data-edit="${s.id}" style="margin-top:8px;padding:6px 12px">${t('edit')}</button>
+          </div></div>`).join('')}
+      </div>
+      <div class="row" style="margin-top:14px"><button class="btn green" style="padding:14px;font-size:17px" id="apr">${t('approve')}</button><button class="btn red" style="padding:14px;font-size:17px" id="dec">${t('decline')}</button></div>`
       : `<div class="muted">${t('nothing')}</div>`}
       <div id="e"></div>
     </div>`;
@@ -406,6 +435,15 @@ async function renderCrew(flash = '') {
     const { data: n, error } = await sb.rpc('tc_approve', { p_ids: ids });
     if (error) return document.getElementById('e').innerHTML = `<div class="err">${esc(errText(error))}</div>`;
     renderCrew(T[lang].approvedCount(n));
+  };
+  document.getElementById('slb').onclick = async e => {
+    const job = document.getElementById('slj').value; if (!job || !confirm(T[lang].setLocConfirm(job))) return;
+    e.target.disabled = true; e.target.textContent = t('gettingGps');
+    const g = await getGps();
+    if (g.lat == null) { e.target.disabled = false; e.target.textContent = t('setLocHere'); return document.getElementById('e').innerHTML = `<div class="err"><b>${t('location_required')}</b><br>${t('locHelp')}</div>`; }
+    const { error } = await sb.rpc('tc_set_job_location', { p_job: job, p_lat: g.lat, p_lng: g.lng });
+    if (error) { e.target.disabled = false; e.target.textContent = t('setLocHere'); return document.getElementById('e').innerHTML = `<div class="err">${esc(errText(error))}</div>`; }
+    await reloadJobs(); renderCrew(t('locSaved'));
   };
   const dec = document.getElementById('dec');
   if (dec) dec.onclick = async () => {
@@ -463,7 +501,7 @@ async function renderOffice(flash = '') {
     S._rows = data;
     body = weekBar + `<div class="scroll"><table><tr><th>#</th><th>${t('name')}</th><th class="n">${t('reg')}</th><th class="n">${t('ot')}</th><th class="n">${t('total')}</th><th>${t('status')}</th></tr>
       ${data.map(r => `<tr><td>${esc(r.employee_code)}</td><td>${esc(r.last_name)}, ${esc(r.first_name)}</td><td class="n">${h(r.regular_hours)}</td><td class="n"><b>${h(r.overtime_hours)}</b></td><td class="n">${h(r.total_hours)}</td>
-        <td>${r.worker_declined > 0 || r.foreman_declined > 0 ? `<span class="tag bad">${r.worker_declined + r.foreman_declined} ${t('declinedByForeman').toLowerCase()}</span> ` : ''}${r.has_missed_clockout ? `<span class="tag bad">${t('missed')}</span>` : r.unapproved_shifts > 0 ? `<span class="tag warn">${r.unapproved_shifts} ${t('unapproved')}</span>` : `<span class="tag ok">${t('approved')}</span>`}</td></tr>`).join('') || `<tr><td colspan="6" class="muted">—</td></tr>`}
+        <td>${r.outside_shifts > 0 ? `<span class="tag warn">${r.outside_shifts} ${t('outside').toLowerCase()}</span> ` : ''}${r.worker_declined > 0 || r.foreman_declined > 0 ? `<span class="tag bad">${r.worker_declined + r.foreman_declined} ${t('declinedByForeman').toLowerCase()}</span> ` : ''}${r.has_missed_clockout ? `<span class="tag bad">${t('missed')}</span>` : r.unapproved_shifts > 0 ? `<span class="tag warn">${r.unapproved_shifts} ${t('unapproved')}</span>` : `<span class="tag ok">${t('approved')}</span>`}</td></tr>`).join('') || `<tr><td colspan="6" class="muted">—</td></tr>`}
       <tr><th></th><th>${t('total')}</th><th class="n">${h(data.reduce((a, r) => a + +r.regular_hours, 0))}</th><th class="n">${h(data.reduce((a, r) => a + +r.overtime_hours, 0))}</th><th class="n">${h(data.reduce((a, r) => a + +r.total_hours, 0))}</th><th></th></tr></table></div>
       <button class="btn" id="dl" style="margin-top:12px">${t('download')}</button>`;
   }
@@ -475,8 +513,8 @@ async function renderOffice(flash = '') {
       ${data.map(s => `<tr><td>${s.clock_out ? `<input type="checkbox" class="ck" value="${s.id}" style="width:22px;height:22px">` : ''}</td>
         <td>${fmtDate(s.work_date)}</td><td>${esc(s.first_name)} ${esc(s.last_name)}</td><td>${esc(s.job_code || '—')}${s.cost_code ? `<br><span class="muted">${esc(s.cost_code)}</span>` : ''}</td>
         <td>${fmtTime(s.clock_in)}</td><td>${s.missed_clockout ? `<span class="tag bad">${t('missed')}</span>` : fmtTime(s.clock_out)}</td>
-        <td class="n">${s.clock_out ? h(s.net_hours) : '—'}</td><td>${s.status === 'rejected' || s.worker_response === 'declined' ? statusTag(s) : ''}</td><td><button class="btn" data-edit="${s.id}">${t('edit')}</button></td></tr>`).join('') || `<tr><td colspan="9" class="muted">—</td></tr>`}
-      </table></div><div class="row" style="margin-top:12px"><button class="btn green" id="apr">${t('approve')}</button><button class="btn" id="dec" style="color:var(--red)">${t('decline')}</button></div>`;
+        <td class="n">${s.clock_out ? h(s.net_hours) : '—'}</td><td>${s.status === 'rejected' || s.worker_response === 'declined' ? statusTag(s) : ''}${geoTags(s)}</td><td><button class="btn" data-edit="${s.id}">${t('edit')}</button></td></tr>`).join('') || `<tr><td colspan="9" class="muted">—</td></tr>`}
+      </table></div><div class="row" style="margin-top:12px"><button class="btn green" id="apr">${t('approve')}</button><button class="btn red" id="dec">${t('decline')}</button></div>`;
   }
 
   if (ot === 'certified') {
@@ -521,8 +559,9 @@ async function renderOffice(flash = '') {
         <label>${t('job')}</label><select id="acj">${data.filter(j => j.is_active).map(j => `<option value="${esc(j.code)}">${esc(j.code)} – ${esc(j.description)}</option>`).join('')}</select>
         <div class="row"><div><label>${t('code')}</label><input id="acc" placeholder="1000.0010"></div><div style="flex:2"><label>${t('description')}</label><input id="acd"></div></div>
         <button class="btn primary" id="acb" style="margin-top:10px">${t('add')}</button></div>
-      <div class="scroll"><table><tr><th>#</th><th>${t('job')}</th><th>${t('active')}</th><th>${t('certifiedQ')}</th></tr>
+      <div class="scroll"><table><tr><th>#</th><th>${t('job')}</th><th>${t('location')}</th><th>${t('active')}</th><th>${t('certifiedQ')}</th></tr>
       ${data.map(j => `<tr data-code="${esc(j.code)}"><td>${esc(j.code)}</td><td>${esc(j.description)}<br><span class="muted">${codesFor(j.code).length} ${t('costCode').toLowerCase()}</span></td>
+        <td><button class="btn" data-loc="${esc(j.code)}">${j.latitude == null ? '📍 ' + t('notSet') : '📍 ' + fmtDist(j.radius_m)}</button></td>
         <td><input type="checkbox" class="ja" ${j.is_active ? 'checked' : ''} style="width:22px;height:22px"></td>
         <td><input type="checkbox" class="jc" ${j.certified_payroll ? 'checked' : ''} style="width:22px;height:22px"></td></tr>`).join('')}
       </table></div>`;
@@ -568,6 +607,7 @@ async function renderOffice(flash = '') {
     const { error } = await sb.rpc('tc_set_job', { p_code: tr.dataset.code, p_active: tr.querySelector('.ja').checked, p_certified: tr.querySelector('.jc').checked });
     error ? err(errText(error)) : (document.getElementById('e').innerHTML = `<div class="msg">${t('saved')}</div>`);
   });
+  document.querySelectorAll('[data-loc]').forEach(b => b.onclick = () => mapDialog(S._rows.find(j => j.code === b.dataset.loc)));
   const acb = document.getElementById('acb');
   if (acb) acb.onclick = async () => {
     const job = document.getElementById('acj').value, code = document.getElementById('acc').value.trim(), desc = document.getElementById('acd').value.trim();
@@ -583,6 +623,50 @@ async function renderOffice(flash = '') {
     const { error } = await sb.rpc('tc_set_pin', { p_code: b.dataset.pin, p_pin: pin.trim() });
     error ? err(errText(error)) : renderOffice(t('pinSaved'));
   });
+}
+
+// ---------------- job location map (office) ----------------
+async function loadLeaflet() {
+  if (window.L) return;
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(css);
+  await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); });
+}
+async function mapDialog(job) {
+  const dlg = document.getElementById('dlg');
+  document.getElementById('dlgBody').innerHTML = `
+    <div class="status">${esc(job.code)} – ${esc(job.description)}</div>
+    <div class="muted">${t('mapHelp')}</div>
+    <div class="row" style="margin-top:8px"><input id="addr" placeholder="${t('searchAddr')}"><button class="btn" id="go" style="flex:0">🔍</button></div>
+    <div id="map" style="height:300px;border-radius:10px;margin-top:8px;background:#e8ebef"></div>
+    <label>${t('radius')}</label><input id="rad" type="number" inputmode="numeric" value="${Math.round((job.radius_m || 300) * 3.28084)}">
+    <div id="me"></div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="mc">${t('cancel')}</button><button class="btn primary" id="ms">${t('save')}</button></div>`;
+  dlg.showModal();
+  document.getElementById('mc').onclick = () => dlg.close();
+  try { await loadLeaflet(); } catch { document.getElementById('me').innerHTML = `<div class="err">${t('noSignal')}</div>`; return; }
+  const start = job.latitude != null ? [job.latitude, job.longitude] : [33.0, -96.9];
+  const map = L.map('map').setView(start, job.latitude != null ? 16 : 9);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  let pos = job.latitude != null ? { lat: job.latitude, lng: job.longitude } : null, marker = null, circle = null;
+  const radM = () => Math.max(50, Math.round((+document.getElementById('rad').value || 1000) / 3.28084));
+  const draw = () => { if (!pos) return; marker ? marker.setLatLng(pos) : marker = L.marker(pos).addTo(map); circle ? circle.setLatLng(pos).setRadius(radM()) : circle = L.circle(pos, { radius: radM(), color: '#1f3a5f' }).addTo(map); };
+  draw();
+  map.on('click', e => { pos = e.latlng; draw(); });
+  document.getElementById('rad').oninput = draw;
+  const search = async () => {
+    const q = document.getElementById('addr').value.trim(); if (!q) return;
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=${encodeURIComponent(q)}`).then(r => r.json()).catch(() => []);
+    if (r[0]) { pos = { lat: +r[0].lat, lng: +r[0].lon }; map.setView(pos, 16); draw(); }
+  };
+  document.getElementById('go').onclick = search;
+  document.getElementById('addr').onkeydown = e => { if (e.key === 'Enter') search(); };
+  setTimeout(() => map.invalidateSize(), 200);
+  document.getElementById('ms').onclick = async () => {
+    if (!pos) return;
+    const { error } = await sb.rpc('tc_set_job_location', { p_job: job.code, p_lat: pos.lat, p_lng: pos.lng, p_radius_m: Math.min(20000, radM()) });
+    if (error) return document.getElementById('me').innerHTML = `<div class="err">${esc(errText(error))}</div>`;
+    dlg.close(); await reloadJobs(); renderOffice(t('locSaved'));
+  };
 }
 
 // ---------------- start ----------------
