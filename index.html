@@ -109,7 +109,7 @@ const T = {
     stillIn:'Todavía en el reloj', approvedCount:n=>`${n} aprobado(s).`, search:'Buscar…',
     costCode:'Código de costo', pickCostCode:'Escoja el código de costo', cost_code_required:'Escoja el código de costo.', cost_code_not_on_job:'Ese código no es de este trabajo.',
     jobCost:'Costo por trabajo', laborHours:'Horas', workers:'Trabajadores', addCostCode:'Agregar código de costo', code:'Código', description:'Descripción', add:'Agregar', noCode:'(sin código)',
-    location_required:'Se necesita su ubicación para marcar.', locHelp:'La ubicación está bloqueada para esta app. iPhone: Ajustes › Privacidad y seguridad › Localización › Sitios web de Safari › Al usar la app. Android: toque el candado junto a la dirección › Permisos › Ubicación › Permitir. Luego cierre la app, ábrala de nuevo y toque Permitir cuando el teléfono pregunte.', locSlow:'El teléfono no dio una ubicación. Revise que la ubicación esté activada (iPhone: Ajustes › Privacidad y seguridad › Localización › Sitios web de Safari › Al usar la app), salga al aire libre o acérquese a una ventana e intente de nuevo.',
+    location_required:'Se necesita su ubicación para marcar.', locHelp:'La ubicación está bloqueada para esta app. iPhone: Ajustes › Privacidad y seguridad › Localización › Sitios web de Safari › Al usar la app. Android: toque el candado junto a la dirección › Permisos › Ubicación › Permitir. Luego cierre la app, ábrala de nuevo y toque Permitir cuando el teléfono pregunte.', locHome:'El iPhone puede bloquear la ubicación cuando la app se abre desde el ícono de la pantalla de inicio. Arreglo: borre el ícono, abra time.imtconstruction.com en Safari, toque Compartir › Agregar a inicio, apague «Abrir como app web» (Open as Web App) y toque Agregar.', locSlow:'El teléfono no dio una ubicación. Revise que la ubicación esté activada (iPhone: Ajustes › Privacidad y seguridad › Localización › Sitios web de Safari › Al usar la app), salga al aire libre o acérquese a una ventana e intente de nuevo.',
     accept:'Aceptar', decline:'Rechazar', acceptedTag:'Aceptado', declinedByMe:'Usted rechazó', declinedByForeman:'Rechazado', workerDeclined:'Trabajador rechazó', declineReason:'¿Qué está mal con estas horas?', declineReasonLead:'Razón para rechazar (el trabajador la verá)', declinedCount:n=>`${n} rechazado(s).`, myShifts:'Mis horas', reviewHours:'Revise sus horas:',
     outside:'Fuera del sitio', outsideIn:'Entrada fuera del sitio', outsideOut:'Salida fuera del sitio', outsideCheck:'Salió del sitio', outsideNote:d=>`Está a ${d} del sitio de trabajo. Su capataz lo verá.`, setLocHere:'Fijar ubicación del trabajo aquí', setLocConfirm:j=>`¿Fijar la ubicación del trabajo ${j} donde está usted ahora?`, locSaved:'Ubicación guardada.', location:'Ubicación', radius:'Radio (pies)', searchAddr:'Buscar dirección', mapHelp:'Busque la dirección o toque el mapa para poner el centro del sitio.', notSet:'Sin ubicación', setBy:'puesta por', noJobLoc:'Trabajo sin ubicación',
     addShift:'Agregar horas', addShiftHelp:'Para alguien que no pudo marcar (teléfono descargado, sin señal). Queda marcado como agregado a mano.', employee:'Empleado', addedByHand:'Agregado a mano', longShift:'Turno muy largo', openNotCounted:'abierto, no cuenta',
@@ -137,7 +137,7 @@ const T = {
     stillIn:'Still clocked in', approvedCount:n=>`${n} approved.`, search:'Search…',
     costCode:'Cost code', pickCostCode:'Pick the cost code', cost_code_required:'Pick the cost code.', cost_code_not_on_job:'That cost code is not on this job.',
     jobCost:'Job cost', laborHours:'Hours', workers:'Workers', addCostCode:'Add cost code', code:'Code', description:'Description', add:'Add', noCode:'(no code)',
-    location_required:'Your location is needed to punch.', locHelp:'Location is blocked for this app. iPhone: Settings › Privacy & Security › Location Services › Safari Websites › While Using the App. Android: tap the lock next to the address › Permissions › Location › Allow. Then close the app, open it again, and tap Allow when the phone asks.', locSlow:'The phone did not give a location. Check that location is turned on (iPhone: Settings › Privacy & Security › Location Services › Safari Websites › While Using the App), step outside or near a window, and try again.',
+    location_required:'Your location is needed to punch.', locHelp:'Location is blocked for this app. iPhone: Settings › Privacy & Security › Location Services › Safari Websites › While Using the App. Android: tap the lock next to the address › Permissions › Location › Allow. Then close the app, open it again, and tap Allow when the phone asks.', locHome:'iPhone can block location when the app is opened from a home-screen icon. Fix: delete the icon, open time.imtconstruction.com in Safari, tap Share › Add to Home Screen, turn OFF “Open as Web App”, then tap Add.', locSlow:'The phone did not give a location. Check that location is turned on (iPhone: Settings › Privacy & Security › Location Services › Safari Websites › While Using the App), step outside or near a window, and try again.',
     accept:'Accept', decline:'Decline', acceptedTag:'Accepted', declinedByMe:'You declined', declinedByForeman:'Declined', workerDeclined:'Worker declined', declineReason:'What is wrong with these hours?', declineReasonLead:'Reason for declining (the worker will see it)', declinedCount:n=>`${n} declined.`, myShifts:'My hours', reviewHours:'Check your hours:',
     outside:'Outside job site', outsideIn:'Clock-in outside site', outsideOut:'Clock-out outside site', outsideCheck:'Left the site', outsideNote:d=>`You are ${d} from the job site. Your foreman will see this.`, setLocHere:'Set job location here', setLocConfirm:j=>`Set the location of job ${j} to where you are standing now?`, locSaved:'Location saved.', location:'Location', radius:'Radius (feet)', searchAddr:'Search address', mapHelp:'Search the address or tap the map to set the center of the site.', notSet:'No location', setBy:'set by', noJobLoc:'Job has no location',
     addShift:'Add hours', addShiftHelp:'For someone who could not punch (dead phone, no signal). It is marked as added by hand.', employee:'Employee', addedByHand:'Added by hand', longShift:'Very long shift', openNotCounted:'open, not counted',
@@ -276,10 +276,18 @@ function outsideMsg(rows, field) {
   const j = S.jobs.find(x => x.code === r.job_code); const d = r[field];
   return (j && d != null && d > j.radius_m) ? ' — ' + T[lang].outsideNote(fmtDist(d)) : '';
 }
+// Error box for a punch with no location. iPhone home-screen web apps get their own fix; the small last line is for troubleshooting.
+function locErrHtml(g) {
+  g = g || {};
+  const home = navigator.standalone === true;
+  const where = home ? 'iPhone home screen' : (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches ? 'installed app' : 'browser');
+  const detail = `${where} · ${g.code ? 'code ' + g.code : 'no code'}${g.msg ? ' · ' + esc(String(g.msg).slice(0, 80)) : ''}`;
+  return `<div class="err"><b>${t('location_required')}</b><br>${t(home && g.denied ? 'locHome' : g.denied ? 'locHelp' : 'locSlow')}<div style="font-size:11px;opacity:.7;margin-top:6px">${detail}</div></div>`;
+}
 async function getGps() {
   if (!navigator.geolocation) return {};
   const once = opts => new Promise(res => navigator.geolocation.getCurrentPosition(
-    p => res({ lat: p.coords.latitude, lng: p.coords.longitude }), e => res({ denied: e && e.code === 1 }), opts));
+    p => res({ lat: p.coords.latitude, lng: p.coords.longitude }), e => res({ denied: e && e.code === 1, code: e && e.code, msg: e && e.message }), opts));
   let g = await once({ enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   // no precise fix (indoors, weak GPS): fall back to the phone's rough location instead of blocking the punch
   if (g.lat == null && !g.denied) g = await once({ enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
@@ -370,7 +378,7 @@ async function renderClock(flash = '') {
   if (jobEl) wireCostCode(jobEl, ccEl, document.getElementById('ccWrap'), open ? open.cost_code : (localStorage.getItem('lastCC') || ''));
   const pickedCC = () => { const v = ccEl && !document.getElementById('ccWrap').classList.contains('hide') ? ccEl.value : ''; return v || null; };
   const busy = (btn, on) => { if (btn) { btn.disabled = on; if (on) btn.textContent = t('gettingGps'); } };
-  const noLoc = (btn, label, g) => { busy(btn, false); btn.textContent = label; document.getElementById('e').innerHTML = `<div class="err"><b>${t('location_required')}</b><br>${t(g && g.denied ? 'locHelp' : 'locSlow')}</div>`; };
+  const noLoc = (btn, label, g) => { busy(btn, false); btn.textContent = label; document.getElementById('e').innerHTML = locErrHtml(g); };
 
   if (open) {
     const tick = () => { const s = Math.max(0, (Date.now() - new Date(open.clock_in)) / 1000); const el = document.getElementById('timer'); if (el) el.textContent = `${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,'0')}`; };
@@ -479,7 +487,7 @@ async function renderCrew(flash = '') {
     const job = document.getElementById('slj').value; if (!job || !await ask({ title: T[lang].setLocConfirm(job), okText: t('save') })) return;
     e.target.disabled = true; e.target.textContent = t('gettingGps');
     const g = await getGps();
-    if (g.lat == null) { e.target.disabled = false; e.target.textContent = t('setLocHere'); return document.getElementById('e').innerHTML = `<div class="err"><b>${t('location_required')}</b><br>${t(g.denied ? 'locHelp' : 'locSlow')}</div>`; }
+    if (g.lat == null) { e.target.disabled = false; e.target.textContent = t('setLocHere'); return document.getElementById('e').innerHTML = locErrHtml(g); }
     const { error } = await sb.rpc('tc_set_job_location', { p_job: job, p_lat: g.lat, p_lng: g.lng });
     if (error) { e.target.disabled = false; e.target.textContent = t('setLocHere'); return document.getElementById('e').innerHTML = `<div class="err">${esc(errText(error))}</div>`; }
     await reloadJobs(); renderCrew(t('locSaved'));
