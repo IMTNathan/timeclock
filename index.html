@@ -506,7 +506,7 @@ async function renderCrew(flash = '') {
 
 async function addShiftDialog(after) {
   const { data: emps } = await sb.from('tc_employees').select('*').eq('is_active', true).order('last_name');
-  const list = (emps || []).filter(e => isOffice() || e.code !== S.me.code).sort((a, b) => (a.last_name + a.first_name).localeCompare(b.last_name + b.first_name));
+  const list = (emps || []).filter(e => !e.is_breakglass && (isOffice() || e.code !== S.me.code)).sort((a, b) => (a.last_name + a.first_name).localeCompare(b.last_name + b.first_name));
   const dlg = document.getElementById('dlg');
   document.getElementById('dlgBody').innerHTML = `
     <div class="status">${t('addShift')}</div><div class="muted">${t('addShiftHelp')}</div>
@@ -618,7 +618,8 @@ async function renderOffice(flash = '') {
   }
 
   if (ot === 'employees') {
-    const { data = [] } = await sb.from('tc_employees').select('*').order('code');
+    const { data: allEmps } = await sb.from('tc_employees').select('*').order('code');
+    const data = (allEmps || []).filter(e => !e.is_breakglass);
     S._rows = data;
     const roles = [['worker', t('worker')], ['foreman', t('foreman')], ['office', t('officeRole')], ['admin', t('admin')]];
     body = `<div class="scroll"><table><tr><th>#</th><th>${t('name')}</th><th>${t('role')}</th><th>${t('language')}</th><th>${t('active')}</th><th>${t('hasPin')}</th><th></th></tr>
