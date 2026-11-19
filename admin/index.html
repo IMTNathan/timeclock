@@ -468,9 +468,10 @@ PAGE.employees = async main => {
   const lastIn = {}; { const r = await sb.rpc('tc_last_signins'); (r.data || []).forEach(x => { lastIn[x.code] = x.last_sign_in; }); }
   const when = iso => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   const exempt = e => e.is_breakglass || e.role === 'office' || e.role === 'admin';
-  const phoneLine = e => exempt(e) ? (S.settings.one_phone && !e.is_breakglass ? '<div class="ph muted">Any phone (office/admin)</div>' : '')
+  const phoneLine = e => e.is_breakglass ? ''
     : e.security_exempt ? `<div class="ph"><span class="tag warn">Exempt from photo and phone rules</span>${iAmAdmin ? ` <button class="btn sm" data-ex="${esc(e.code)}" data-v="0">Apply rules</button>` : ''}</div>`
-    : (e.phone_registered_at ? `<div class="ph">Phone registered ${esc(when(e.phone_registered_at))} <button class="btn sm" data-rp="${esc(e.code)}">Reset phone</button></div>`
+    : (exempt(e) ? (S.settings.one_phone ? '<div class="ph muted">Any phone (office/admin)</div>' : '')
+      : e.phone_registered_at ? `<div class="ph">Phone registered ${esc(when(e.phone_registered_at))} <button class="btn sm" data-rp="${esc(e.code)}">Reset phone</button></div>`
       : S.settings.one_phone ? '<div class="ph muted">No phone registered yet</div>' : '')
       + (iAmAdmin && (S.settings.one_phone || S.settings.require_photo) ? `<div class="ph"><button class="btn sm" data-ex="${esc(e.code)}" data-v="1">Exempt</button></div>` : '');
   const bgUsed = bg ? lastIn[bg.code] || null : null;
@@ -479,7 +480,7 @@ PAGE.employees = async main => {
     <div class="card sec"><b>Clock-in security</b>
       <label><input type="checkbox" id="secPhoto" ${S.settings.require_photo ? 'checked' : ''} ${iAmAdmin ? '' : 'disabled'}> Photo at every punch</label>
       <label><input type="checkbox" id="secPhone" ${S.settings.one_phone ? 'checked' : ''} ${iAmAdmin ? '' : 'disabled'}> One phone per employee</label>
-      <div class="muted" style="margin-top:8px">Only an admin can change these. With one phone per employee, a worker or foreman can only punch from the phone they first punched from, and that phone cannot punch for anyone else. Office and admin logins can use any phone. An admin can exempt one person from both rules with the Exempt button on their row.</div></div>
+      <div class="muted" style="margin-top:8px">Only an admin can change these. With one phone per employee, a worker or foreman can only punch from the phone they first punched from, and that phone cannot punch for anyone else. Office and admin logins can use any phone but still need the photo. An admin can exempt one person from both rules with the Exempt button on their row.</div></div>
     <div class="card" style="padding:0"><div class="scroll"><table class="cards t-emp">
       <thead><tr><th>#</th><th>Name</th><th>Role</th><th>Language</th><th>Active</th><th>Sign-in</th><th>Last sign-in / phone</th><th></th></tr></thead>
       <tbody>${list.map(e => `<tr data-code="${esc(e.code)}" data-name="${esc((e.first_name + ' ' + e.last_name + ' ' + e.code).toLowerCase())}">
