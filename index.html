@@ -336,11 +336,13 @@ function takePhoto() {
 }
 function busy(btn, on) { if (btn) { btn.disabled = on; if (on) btn.textContent = t('gettingGps'); } }
 function noLoc(btn, label, g) { busy(btn, false); btn.textContent = label; document.getElementById('e').innerHTML = locErrHtml(g); }
+// The photo rule is on and this person is not exempt from it
+function photoNeeded() { return !!(S.settings && S.settings.require_photo && !(S.me && S.me.security_exempt)); }
 function showErr(m) { const e = document.getElementById('e'); if (e) e.innerHTML = `<div class="err">${esc(m)}</div>`; }
 // Photo first (the camera has to open straight from the tap), then location.
 async function punchExtras(btn, label) {
   let photo = null;
-  if (S.settings && S.settings.require_photo) {
+  if (photoNeeded()) {
     const p = await takePhoto();
     if (p.cancel) return null;
     if (p.old || p.bad) { showErr(t(p.old ? 'photoOld' : 'photoBad')); return null; }
@@ -353,7 +355,7 @@ async function punchExtras(btn, label) {
 }
 function punchErr(btn, label, error) {
   busy(btn, false); btn.textContent = label;
-  if (String(error && error.message).includes('photo_required')) (S.settings = S.settings || {}).require_photo = true;
+  if (String(error && error.message).includes('photo_required')) { (S.settings = S.settings || {}).require_photo = true; if (S.me) S.me.security_exempt = false; }
   showErr(errText(error));
 }
 // Error box for a punch with no location. iPhone home-screen web apps get their own fix; the small last line is for troubleshooting.
@@ -431,7 +433,7 @@ async function renderClock(flash = '') {
              : `<label>${t('pickJob')}</label><select id="job"><option value="">—</option>${jobOpts}</select>
                 <div id="ccWrap" class="hide"><label>${t('pickCostCode')}</label><select id="cc"></select></div>
                 <div style="height:14px"></div><button class="big in" id="inBtn">${t('clockIn')}</button>`}
-      ${S.settings && S.settings.require_photo ? `<div class="muted" style="margin-top:10px;text-align:center">📷 ${t('photoNote')}</div>` : ''}
+      ${photoNeeded() ? `<div class="muted" style="margin-top:10px;text-align:center">📷 ${t('photoNote')}</div>` : ''}
       ${S.me.is_training ? `<div class="muted" id="trainNote" style="margin-top:10px;text-align:center">${t('trainingNote')}</div>` : ''}
       <div id="e"></div>
     </div>
@@ -519,6 +521,7 @@ async function renderCrew(flash = '') {
   const { data: missed } = await sb.from('tc_shifts').select('*').eq('missed_clockout', true).neq('employee_code', S.me.code).lt('work_date', d);
   const rows = [...(missed || []), ...(data || [])];
   // Punch photos for the shifts on screen, so the foreman can see who was holding the phone
+  const noRule = new Set(); if (S.settings.require_photo) { const { data: ex } = await sb.from('tc_employees').select('code').eq('security_exempt', true); (ex || []).forEach(x => noRule.add(x.code)); }
   const pics = {}; { const ids = rows.filter(s => s.has_photo_in || s.has_photo_out).map(s => s.id);
     if (ids.length) { const { data: ph } = await sb.from('tc_punch_photos').select('entry_id,kind,photo').in('entry_id', ids); (ph || []).forEach(p => { (pics[p.entry_id] = pics[p.entry_id] || {})[p.kind] = p.photo; }); } }
   $app.innerHTML = `
@@ -540,7 +543,7 @@ async function renderCrew(flash = '') {
             <div class="row" style="align-items:flex-start"><div><b>${esc(s.first_name)} ${esc(s.last_name)}</b>${s.work_date !== d ? ` <span class="muted">${fmtDate(s.work_date)}</span>` : ''}</div>
               <div class="hrs" style="flex:0 0 auto;text-align:right">${s.clock_out ? h(s.net_hours) : '—'}</div></div>
             <div class="muted">${fmtTime(s.clock_in)} – ${fmtTime(s.clock_out)} · ${esc(s.job_code || '—')}${s.cost_code ? ' / ' + esc(s.cost_code) + ' ' + esc(s.cost_code_description || '') : ''}</div>
-            <div style="margin-top:4px">${statusTag(s)}${geoTags(s)}${S.settings.require_photo && !s.manual && !s.has_photo_in ? ` <span class="tag warn">${t('noPhoto')}</span>` : ''}</div>
+            <div style="margin-top:4px">${statusTag(s)}${geoTags(s)}${S.settings.require_photo && !s.manual && !s.has_photo_in && !noRule.has(s.employee_code) ? ` <span class="tag warn">${t('noPhoto')}</span>` : ''}</div>
             ${pics[s.id] ? `<div class="pics">${['in', 'out'].filter(k => pics[s.id][k]).map(k => `<figure><img src="data:image/jpeg;base64,${pics[s.id][k]}" alt=""><figcaption>${t(k === 'in' ? 'photoIn' : 'photoOut')}</figcaption></figure>`).join('')}</div>` : ''}
             <button class="btn" data-edit="${s.id}" style="margin-top:8px;padding:6px 12px">${t('edit')}</button>
           </div></div>`).join('')}
