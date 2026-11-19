@@ -111,7 +111,7 @@ const T = {
     newPin:'PIN nuevo (4 dígitos)', pinSaved:'PIN guardado.', saved:'Guardado.', certifiedQ:'Nómina certificada',
     prev:'‹ Anterior', nextW:'Siguiente ›', noSignal:'Sin señal. Intente de nuevo cuando tenga señal.',
     already_clocked_in:'Ya está en el reloj.', not_clocked_in:'No está en el reloj.', job_not_active:'Ese trabajo no está activo.',
-    not_an_employee:'Su usuario no está activo. Hable con la oficina.', not_allowed:'No tiene permiso.',
+    not_an_employee:'Su usuario no está activo. Hable con la oficina.', not_allowed:'No tiene permiso.', owner:'Dueño', owner_only:'Solo el dueño puede hacer eso.', owner_always_admin:'El dueño siempre es administrador activo.',
     pin_must_be_4_digits:'El PIN debe tener 4 números.', reason_required:'Escriba la razón.',
     worker:'Trabajador', foreman:'Capataz', officeRole:'Oficina', admin:'Admin', mon:'Lun', tue:'Mar', wed:'Mié', thu:'Jue', fri:'Vie', sat:'Sáb', sun:'Dom',
     stillIn:'Todavía en el reloj', approvedCount:n=>`${n} aprobado(s).`, search:'Buscar…',
@@ -139,7 +139,7 @@ const T = {
     newPin:'New PIN (4 digits)', pinSaved:'PIN saved.', saved:'Saved.', certifiedQ:'Certified payroll',
     prev:'‹ Prev', nextW:'Next ›', noSignal:'No signal. Try again when you have signal.',
     already_clocked_in:'Already clocked in.', not_clocked_in:'Not clocked in.', job_not_active:'That job is not active.',
-    not_an_employee:'Your login is not active. Talk to the office.', not_allowed:'Not allowed.',
+    not_an_employee:'Your login is not active. Talk to the office.', not_allowed:'Not allowed.', owner:'Owner', owner_only:'Only the owner can do that.', owner_always_admin:'The owner is always an active admin.',
     pin_must_be_4_digits:'PIN must be 4 numbers.', reason_required:'Enter a reason.',
     worker:'Worker', foreman:'Foreman', officeRole:'Office', admin:'Admin', mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun',
     stillIn:'Still clocked in', approvedCount:n=>`${n} approved.`, search:'Search…',
@@ -169,7 +169,7 @@ function h(n) { return (Math.round((Number(n) || 0) * 100) / 100).toFixed(2); }
 function toLocalInput(iso) { if (!iso) return ''; const d = new Date(iso); const z = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; }
 function errText(e) {
   const m = (e && (e.message || e.error_description || String(e))) || '';
-  for (const k of ['already_clocked_in','not_clocked_in','job_not_active','not_an_employee','not_allowed','pin_must_be_4_digits','reason_required','cost_code_required','cost_code_not_on_job','location_required','bad_times','foreman_not_on_job','overlaps_existing','employee_not_found','photo_required','photo_invalid','phone_id_missing','wrong_phone','phone_belongs_to_other']) if (m.includes(k)) return t(k);
+  for (const k of ['already_clocked_in','not_clocked_in','job_not_active','not_an_employee','not_allowed','pin_must_be_4_digits','reason_required','cost_code_required','cost_code_not_on_job','location_required','bad_times','foreman_not_on_job','overlaps_existing','employee_not_found','photo_required','photo_invalid','phone_id_missing','wrong_phone','phone_belongs_to_other','owner_only','owner_always_admin']) if (m.includes(k)) return t(k);
   if (/fetch|network|Failed/i.test(m)) return t('noSignal');
   return m;
 }
@@ -706,10 +706,10 @@ async function renderOffice(flash = '') {
     const roles = [['worker', t('worker')], ['foreman', t('foreman')], ['admin', t('admin')]];   // 'office' is no longer offered
     body = `<div class="scroll"><table><tr><th>#</th><th>${t('name')}</th><th>${t('role')}</th><th>${t('language')}</th><th>${t('active')}</th><th>${t('hasPin')}</th><th></th></tr>
       ${data.map(e => `<tr data-code="${esc(e.code)}"><td>${esc(e.code)}</td><td>${esc(e.last_name)}, ${esc(e.first_name)}</td>
-        <td><select class="er" style="font-size:14px;padding:6px">${roles.concat(roles.some(([v]) => v === e.role) ? [] : [[e.role, e.role === 'office' ? t('officeRole') : e.role]]).map(([v, l]) => `<option value="${v}" ${e.role === v ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
-        <td><select class="el" style="font-size:14px;padding:6px"><option value="es" ${e.language === 'es' ? 'selected' : ''}>ES</option><option value="en" ${e.language === 'en' ? 'selected' : ''}>EN</option></select></td>
-        <td><input type="checkbox" class="ea" ${e.is_active ? 'checked' : ''} style="width:22px;height:22px"></td>
-        <td>${e.has_pin ? '✓' : ''}</td><td><button class="btn" data-pin="${esc(e.code)}">${t('setPin')}</button></td></tr>`).join('')}
+        <td><select class="er" style="font-size:14px;padding:6px" ${e.is_owner ? 'disabled' : ''}>${e.is_owner ? `<option value="admin" selected>${t('owner')}</option>` : roles.concat(roles.some(([v]) => v === e.role) ? [] : [[e.role, e.role === 'office' ? t('officeRole') : e.role]]).map(([v, l]) => `<option value="${v}" ${e.role === v ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+        <td><select class="el" style="font-size:14px;padding:6px" ${e.is_owner && !S.me.is_owner ? 'disabled' : ''}><option value="es" ${e.language === 'es' ? 'selected' : ''}>ES</option><option value="en" ${e.language === 'en' ? 'selected' : ''}>EN</option></select></td>
+        <td><input type="checkbox" class="ea" ${e.is_active ? 'checked' : ''} ${e.is_owner ? 'disabled' : ''} style="width:22px;height:22px"></td>
+        <td>${e.has_pin ? '✓' : ''}</td><td><button class="btn" data-pin="${esc(e.code)}" ${e.is_owner && !S.me.is_owner ? 'disabled' : ''}>${t('setPin')}</button></td></tr>`).join('')}
       </table></div>`;
   }
 

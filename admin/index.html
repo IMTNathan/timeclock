@@ -193,7 +193,7 @@ const fTime = iso => iso ? new Date(iso).toLocaleTimeString('en-US', { hour:'num
 const h = n => (Math.round((+n || 0) * 100) / 100).toFixed(2);
 const fDist = m => { if (m == null) return ''; const ft = m * 3.28084; return ft < 1000 ? `${Math.round(ft / 10) * 10} ft` : `${(ft / 5280).toFixed(1)} mi`; };
 const toLocalInput = iso => { if (!iso) return ''; const d = new Date(iso); return `${dstr(d)}T${z(d.getHours())}:${z(d.getMinutes())}`; };
-const ERR = { breakglass_always_on:'The emergency login is always on and always an admin.', breakglass_password_rule:'The emergency password must be 14 to 72 characters.', bad_times:'Check the times: clock-out must be after clock-in, not in the future, and under 24 hours.', overlaps_existing:'That person already has time during those hours.', foreman_not_on_job:'Not allowed on that job.', already_clocked_in:'Already clocked in.', not_allowed:'Not allowed.', reason_required:'A reason is required.', pin_must_be_4_digits:'PIN must be 4 digits.', cost_code_required:'This job needs a cost code.', cost_code_not_on_job:'That cost code is not on this job.', employee_not_found:'Employee not found.' };
+const ERR = { owner_only:'Only the owner can do that.', owner_always_admin:'The owner is always an active admin.', owner_change_not_allowed:'Ownership cannot be changed here.', breakglass_always_on:'The emergency login is always on and always an admin.', breakglass_password_rule:'The emergency password must be 14 to 72 characters.', bad_times:'Check the times: clock-out must be after clock-in, not in the future, and under 24 hours.', overlaps_existing:'That person already has time during those hours.', foreman_not_on_job:'Not allowed on that job.', already_clocked_in:'Already clocked in.', not_allowed:'Not allowed.', reason_required:'A reason is required.', pin_must_be_4_digits:'PIN must be 4 digits.', cost_code_required:'This job needs a cost code.', cost_code_not_on_job:'That cost code is not on this job.', employee_not_found:'Employee not found.' };
 const errText = e => { const m = e?.message || String(e); for (const k in ERR) if (m.includes(k)) return ERR[k]; return /fetch|network/i.test(m) ? 'Connection problem — try again.' : m; };
 function csv(rows, cols, name) {
   const body = [cols.map(c => c[1]).join(','), ...rows.map(r => cols.map(c => `"${String(typeof c[0] === 'function' ? c[0](r) : r[c[0]] ?? '').replace(/"/g, '""')}"`).join(','))].join('\r\n');
@@ -276,7 +276,7 @@ async function render() {
   $root.innerHTML = `<div class="layout">
     <aside><div class="brand"><img class="full" src="../logo.png" alt="IMT Construction"><img class="mark" src="../logo-mark.png" alt="IMT Construction"><small>Timeclock admin</small><a class="mout" id="out2">Sign out</a></div>
       <nav>${PAGES.map(([k, l]) => `<a class="${S.page === k ? 'on' : ''}" data-p="${k}">${l}${k === 'time' && count ? `<span class="badge">${count}</span>` : ''}</a>`).join('')}</nav>
-      <div class="who">${esc(S.me.first_name)} ${esc(S.me.last_name)} · ${esc(S.me.role)}<br><a id="out">Sign out</a> · <a href="../" target="_blank">Phone app</a></div></aside>
+      <div class="who">${esc(S.me.first_name)} ${esc(S.me.last_name)} · ${esc(S.me.is_owner ? 'owner' : S.me.role)}<br><a id="out">Sign out</a> · <a href="../" target="_blank">Phone app</a></div></aside>
     <main id="main"></main></div>`;
   document.querySelectorAll('[data-p]').forEach(a => a.onclick = () => { S.page = a.dataset.p; S.flash = ''; render(); });
   document.getElementById('out').onclick = document.getElementById('out2').onclick = async () => { await sb.auth.signOut(); location.reload(); };
@@ -464,7 +464,7 @@ PAGE.employees = async main => {
   await loadRef();
   const roles = ['worker','foreman','admin'];   // 'office' is no longer offered; a row that still has it keeps showing it
   const list = S.emps.filter(e => !e.is_breakglass).concat(S.emps.filter(e => e.is_breakglass));
-  const bg = S.emps.find(e => e.is_breakglass), iAmAdmin = S.me.role === 'admin';
+  const bg = S.emps.find(e => e.is_breakglass), iAmAdmin = S.me.role === 'admin', iAmOwner = !!S.me.is_owner, iAmBg = !!S.me.is_breakglass;
   const lastIn = {}; { const r = await sb.rpc('tc_last_signins'); (r.data || []).forEach(x => { lastIn[x.code] = x.last_sign_in; }); }
   const when = iso => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   const exempt = e => e.is_breakglass || e.role === 'office' || e.role === 'admin';
@@ -485,14 +485,14 @@ PAGE.employees = async main => {
     <div class="card" style="padding:0"><div class="scroll"><table class="cards t-emp">
       <thead><tr><th>#</th><th>Name</th><th>Role</th><th>Language</th><th>Active</th><th>Sign-in</th><th>Last sign-in / phone</th><th></th></tr></thead>
       <tbody>${list.map(e => `<tr data-code="${esc(e.code)}" data-name="${esc((e.first_name + ' ' + e.last_name + ' ' + e.code).toLowerCase())}">
-        <td>${esc(e.code)}</td><td><b>${esc(e.last_name)}, ${esc(e.first_name)}</b>${e.is_breakglass ? ' <span class="tag warn">Emergency login</span>' : ''}${e.is_training ? ' <span class="tag" title="Punches are left out of payroll and job cost, and removed at 6 PM each day">Training login</span>' : ''}</td>
-        <td><select class="er" ${e.is_breakglass ? 'disabled' : ''}>${roles.concat(roles.includes(e.role) ? [] : [e.role]).map(r => `<option ${e.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></td>
-        <td>${e.is_breakglass ? '' : `<select class="el"><option value="es" ${e.language === 'es' ? 'selected' : ''}>Spanish</option><option value="en" ${e.language === 'en' ? 'selected' : ''}>English</option></select>`}</td>
-        <td>${e.is_breakglass ? '<span class="tag ok">Always on</span>' : `<input type="checkbox" class="ea" ${e.is_active ? 'checked' : ''}>`}</td>
+        <td>${esc(e.code)}</td><td><b>${esc(e.last_name)}, ${esc(e.first_name)}</b>${e.is_breakglass ? ' <span class="tag warn">Emergency login</span>' : ''}${e.is_owner ? ' <span class="tag" title="An admin who can also set the emergency login password. Only the owner can change this row.">Owner</span>' : ''}${e.is_training ? ' <span class="tag" title="Punches are left out of payroll and job cost, and removed at 6 PM each day">Training login</span>' : ''}</td>
+        <td><select class="er" ${e.is_breakglass || e.is_owner ? 'disabled' : ''}>${e.is_owner ? '<option value="admin" selected>owner</option>' : roles.concat(roles.includes(e.role) ? [] : [e.role]).map(r => `<option ${e.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></td>
+        <td>${e.is_breakglass ? '' : `<select class="el" ${e.is_owner && !iAmOwner ? 'disabled' : ''}><option value="es" ${e.language === 'es' ? 'selected' : ''}>Spanish</option><option value="en" ${e.language === 'en' ? 'selected' : ''}>English</option></select>`}</td>
+        <td>${e.is_breakglass ? '<span class="tag ok">Always on</span>' : `<input type="checkbox" class="ea" ${e.is_active ? 'checked' : ''} ${e.is_owner ? 'disabled title="The owner is always active"' : ''}>`}</td>
         <td>${e.is_breakglass ? (e.has_pin ? '<span class="tag ok">Password set</span>' : '<span class="tag">No password</span>') : e.has_pin ? '<span class="tag ok">PIN set</span>' : '<span class="tag">No PIN</span>'}</td>
         <td class="ls">${lastIn[e.code] ? esc(when(lastIn[e.code])) : e.has_pin ? 'Never' : '—'}${phoneLine(e)}</td>
-        <td>${e.is_breakglass ? `<button class="btn sm" data-bg="${esc(e.code)}" ${iAmAdmin ? '' : 'disabled'}>${e.has_pin ? 'Reset password' : 'Set password'}</button>` : `<button class="btn sm" data-pin="${esc(e.code)}">${e.has_pin ? 'Reset PIN' : 'Set PIN'}</button>`}</td></tr>`).join('')}</tbody></table></div></div>
-    ${bg ? `<div class="sub" id="bgNote" style="margin-top:12px"><b>Emergency login.</b> For when the normal admin login cannot be used. Sign in on this site with employee number <b>${esc(bg.code)}</b> and its password. Only an admin can set the password, and it cannot be switched off here. ${bg.has_pin ? `Last used: <b>${bgUsed ? esc(when(bgUsed)) : 'never'}</b>.` : 'No password is set yet, so it cannot be used.'}</div>` : ''}`;
+        <td>${e.is_breakglass ? `<button class="btn sm" data-bg="${esc(e.code)}" ${iAmOwner ? '' : 'disabled title="Only the owner can set this password"'}>${e.has_pin ? 'Reset password' : 'Set password'}</button>` : `<button class="btn sm" data-pin="${esc(e.code)}" ${e.is_owner && !iAmOwner && !iAmBg ? 'disabled title="Only the owner or the emergency login can reset this PIN"' : ''}>${e.has_pin ? 'Reset PIN' : 'Set PIN'}</button>`}</td></tr>`).join('')}</tbody></table></div></div>
+    ${bg ? `<div class="sub" id="bgNote" style="margin-top:12px"><b>Emergency login.</b> For when the normal admin login cannot be used. Sign in on this site with employee number <b>${esc(bg.code)}</b> and its password. Only the owner can set the password, and it cannot be switched off here. ${bg.has_pin ? `Last used: <b>${bgUsed ? esc(when(bgUsed)) : 'never'}</b>.` : 'No password is set yet, so it cannot be used.'}</div>` : ''}`;
   document.getElementById('eq').oninput = e => { const q = e.target.value.toLowerCase(); main.querySelectorAll('tr[data-name]').forEach(tr => tr.classList.toggle('hide', !tr.dataset.name.includes(q))); };
   main.querySelectorAll('tr[data-code] select, tr[data-code] .ea').forEach(el => el.onchange = async () => {
     const tr = el.closest('tr');
