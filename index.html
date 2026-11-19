@@ -337,7 +337,7 @@ function takePhoto() {
 function busy(btn, on) { if (btn) { btn.disabled = on; if (on) btn.textContent = t('gettingGps'); } }
 function noLoc(btn, label, g) { busy(btn, false); btn.textContent = label; document.getElementById('e').innerHTML = locErrHtml(g); }
 // The photo rule is on and this person is not exempt from it
-function photoNeeded() { return !!(S.settings && S.settings.require_photo && !(S.me && S.me.security_exempt)); }
+function photoNeeded() { return !!(S.settings && S.settings.require_photo && !(S.me && (S.me.security_exempt || S.me.role === 'admin' || S.me.role === 'office'))); }
 function showErr(m) { const e = document.getElementById('e'); if (e) e.innerHTML = `<div class="err">${esc(m)}</div>`; }
 // Photo first (the camera has to open straight from the tap), then location.
 async function punchExtras(btn, label) {
@@ -521,7 +521,7 @@ async function renderCrew(flash = '') {
   const { data: missed } = await sb.from('tc_shifts').select('*').eq('missed_clockout', true).neq('employee_code', S.me.code).lt('work_date', d);
   const rows = [...(missed || []), ...(data || [])];
   // Punch photos for the shifts on screen, so the foreman can see who was holding the phone
-  const noRule = new Set(); if (S.settings.require_photo) { const { data: ex } = await sb.from('tc_employees').select('code').eq('security_exempt', true); (ex || []).forEach(x => noRule.add(x.code)); }
+  const noRule = new Set(); if (S.settings.require_photo) { const { data: ex } = await sb.from('tc_employees').select('code,role,security_exempt'); (ex || []).filter(x => x.security_exempt || x.role === 'admin' || x.role === 'office').forEach(x => noRule.add(x.code)); }
   const pics = {}; { const ids = rows.filter(s => s.has_photo_in || s.has_photo_out).map(s => s.id);
     if (ids.length) { const { data: ph } = await sb.from('tc_punch_photos').select('entry_id,kind,photo').in('entry_id', ids); (ph || []).forEach(p => { (pics[p.entry_id] = pics[p.entry_id] || {})[p.kind] = p.photo; }); } }
   $app.innerHTML = `
@@ -703,10 +703,10 @@ async function renderOffice(flash = '') {
     const { data: allEmps } = await sb.from('tc_employees').select('*').order('code');
     const data = (allEmps || []).filter(e => !e.is_breakglass);
     S._rows = data;
-    const roles = [['worker', t('worker')], ['foreman', t('foreman')], ['office', t('officeRole')], ['admin', t('admin')]];
+    const roles = [['worker', t('worker')], ['foreman', t('foreman')], ['admin', t('admin')]];   // 'office' is no longer offered
     body = `<div class="scroll"><table><tr><th>#</th><th>${t('name')}</th><th>${t('role')}</th><th>${t('language')}</th><th>${t('active')}</th><th>${t('hasPin')}</th><th></th></tr>
       ${data.map(e => `<tr data-code="${esc(e.code)}"><td>${esc(e.code)}</td><td>${esc(e.last_name)}, ${esc(e.first_name)}</td>
-        <td><select class="er" style="font-size:14px;padding:6px">${roles.map(([v, l]) => `<option value="${v}" ${e.role === v ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+        <td><select class="er" style="font-size:14px;padding:6px">${roles.concat(roles.some(([v]) => v === e.role) ? [] : [[e.role, e.role === 'office' ? t('officeRole') : e.role]]).map(([v, l]) => `<option value="${v}" ${e.role === v ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
         <td><select class="el" style="font-size:14px;padding:6px"><option value="es" ${e.language === 'es' ? 'selected' : ''}>ES</option><option value="en" ${e.language === 'en' ? 'selected' : ''}>EN</option></select></td>
         <td><input type="checkbox" class="ea" ${e.is_active ? 'checked' : ''} style="width:22px;height:22px"></td>
         <td>${e.has_pin ? '✓' : ''}</td><td><button class="btn" data-pin="${esc(e.code)}">${t('setPin')}</button></td></tr>`).join('')}

@@ -217,7 +217,7 @@ function statusTags(s) {
   if (s.long_shift) t.push('<span class="tag bad" title="Longer than a normal day — probably a forgotten clock-out">Very long shift</span>');
   if ((S.emps || []).some(e => e.code === s.employee_code && e.is_training)) t.push('<span class="tag" title="Not counted in payroll or job cost. Removed at 6 PM each day.">Training</span>');
   if (s.manual) t.push(`<span class="tag" title="Entered by ${esc(s.created_by || '')}, not punched on a phone">Added by hand</span>`);
-  else if (S.settings && S.settings.require_photo && !s.has_photo_in && !(S.emps || []).some(e => e.code === s.employee_code && e.security_exempt)) t.push('<span class="tag warn" title="No photo was taken at clock-in">No photo</span>');
+  else if (S.settings && S.settings.require_photo && !s.has_photo_in && !(S.emps || []).some(e => e.code === s.employee_code && (e.security_exempt || e.role === 'admin' || e.role === 'office'))) t.push('<span class="tag warn" title="No photo was taken at clock-in">No photo</span>');
   if (s.worker_response === 'declined') t.push(`<span class="tag warn" title="${esc(s.worker_note)}">Worker declined: ${esc(s.worker_note || '')}</span>`);
   if (s.worker_response === 'accepted') t.push('<span class="tag ok">Worker accepted</span>');
   if (s.outside_in) t.push(`<span class="tag bad">In outside ${fDist(s.in_distance_m)}</span>`);
@@ -462,30 +462,31 @@ PAGE.jobcost = async main => {
 
 PAGE.employees = async main => {
   await loadRef();
-  const roles = ['worker','foreman','office','admin'];
+  const roles = ['worker','foreman','admin'];   // 'office' is no longer offered; a row that still has it keeps showing it
   const list = S.emps.filter(e => !e.is_breakglass).concat(S.emps.filter(e => e.is_breakglass));
   const bg = S.emps.find(e => e.is_breakglass), iAmAdmin = S.me.role === 'admin';
   const lastIn = {}; { const r = await sb.rpc('tc_last_signins'); (r.data || []).forEach(x => { lastIn[x.code] = x.last_sign_in; }); }
   const when = iso => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   const exempt = e => e.is_breakglass || e.role === 'office' || e.role === 'admin';
+  const rulesOn = S.settings.one_phone || S.settings.require_photo;
   const phoneLine = e => e.is_breakglass ? ''
+    : exempt(e) ? (rulesOn ? '<div class="ph muted">Admin: no photo, any phone</div>' : '')
     : e.security_exempt ? `<div class="ph"><span class="tag warn">Exempt from photo and phone rules</span>${iAmAdmin ? ` <button class="btn sm" data-ex="${esc(e.code)}" data-v="0">Apply rules</button>` : ''}</div>`
-    : (exempt(e) ? (S.settings.one_phone ? '<div class="ph muted">Any phone (office/admin)</div>' : '')
-      : e.phone_registered_at ? `<div class="ph">Phone registered ${esc(when(e.phone_registered_at))} <button class="btn sm" data-rp="${esc(e.code)}">Reset phone</button></div>`
+    : (e.phone_registered_at ? `<div class="ph">Phone registered ${esc(when(e.phone_registered_at))} <button class="btn sm" data-rp="${esc(e.code)}">Reset phone</button></div>`
       : S.settings.one_phone ? '<div class="ph muted">No phone registered yet</div>' : '')
-      + (iAmAdmin && (S.settings.one_phone || S.settings.require_photo) ? `<div class="ph"><button class="btn sm" data-ex="${esc(e.code)}" data-v="1">Exempt</button></div>` : '');
+      + (iAmAdmin && rulesOn ? `<div class="ph"><button class="btn sm" data-ex="${esc(e.code)}" data-v="1">Exempt</button></div>` : '');
   const bgUsed = bg ? lastIn[bg.code] || null : null;
   main.innerHTML = `<h1>Employees</h1><div class="sub">Changes save as soon as you change a field. Employee numbers should match ComputerEase. Last sign-in is the last time the PIN was entered; phones stay signed in between uses.</div>${flash()}
     <div class="toolbar"><input id="eq" placeholder="Search" style="width:220px"><span class="grow"></span><button class="btn primary" id="add">Add employee</button></div>
     <div class="card sec"><b>Clock-in security</b>
       <label><input type="checkbox" id="secPhoto" ${S.settings.require_photo ? 'checked' : ''} ${iAmAdmin ? '' : 'disabled'}> Photo at every punch</label>
       <label><input type="checkbox" id="secPhone" ${S.settings.one_phone ? 'checked' : ''} ${iAmAdmin ? '' : 'disabled'}> One phone per employee</label>
-      <div class="muted" style="margin-top:8px">Only an admin can change these. With one phone per employee, a worker or foreman can only punch from the phone they first punched from, and that phone cannot punch for anyone else. Office and admin logins can use any phone but still need the photo. An admin can exempt one person from both rules with the Exempt button on their row.</div></div>
+      <div class="muted" style="margin-top:8px">Only an admin can change these. With one phone per employee, a worker or foreman can only punch from the phone they first punched from, and that phone cannot punch for anyone else. Admin logins are not asked for a photo and can use any phone. An admin can exempt a worker or foreman from both rules with the Exempt button on their row.</div></div>
     <div class="card" style="padding:0"><div class="scroll"><table class="cards t-emp">
       <thead><tr><th>#</th><th>Name</th><th>Role</th><th>Language</th><th>Active</th><th>Sign-in</th><th>Last sign-in / phone</th><th></th></tr></thead>
       <tbody>${list.map(e => `<tr data-code="${esc(e.code)}" data-name="${esc((e.first_name + ' ' + e.last_name + ' ' + e.code).toLowerCase())}">
         <td>${esc(e.code)}</td><td><b>${esc(e.last_name)}, ${esc(e.first_name)}</b>${e.is_breakglass ? ' <span class="tag warn">Emergency login</span>' : ''}${e.is_training ? ' <span class="tag" title="Punches are left out of payroll and job cost, and removed at 6 PM each day">Training login</span>' : ''}</td>
-        <td><select class="er" ${e.is_breakglass ? 'disabled' : ''}>${roles.map(r => `<option ${e.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></td>
+        <td><select class="er" ${e.is_breakglass ? 'disabled' : ''}>${roles.concat(roles.includes(e.role) ? [] : [e.role]).map(r => `<option ${e.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></td>
         <td>${e.is_breakglass ? '' : `<select class="el"><option value="es" ${e.language === 'es' ? 'selected' : ''}>Spanish</option><option value="en" ${e.language === 'en' ? 'selected' : ''}>English</option></select>`}</td>
         <td>${e.is_breakglass ? '<span class="tag ok">Always on</span>' : `<input type="checkbox" class="ea" ${e.is_active ? 'checked' : ''}>`}</td>
         <td>${e.is_breakglass ? (e.has_pin ? '<span class="tag ok">Password set</span>' : '<span class="tag">No password</span>') : e.has_pin ? '<span class="tag ok">PIN set</span>' : '<span class="tag">No PIN</span>'}</td>
@@ -705,7 +706,7 @@ function pinDialog(code) {
 
 function addEmployeeDialog() {
   openDlg(`<h1>Add employee</h1>
-    <div class="grid2"><div><label class="f">Employee # (same as ComputerEase)</label><input id="ac" style="width:100%"></div><div><label class="f">Role</label><select id="ar" style="width:100%"><option>worker</option><option>foreman</option><option>office</option><option>admin</option></select></div>
+    <div class="grid2"><div><label class="f">Employee # (same as ComputerEase)</label><input id="ac" style="width:100%"></div><div><label class="f">Role</label><select id="ar" style="width:100%"><option>worker</option><option>foreman</option><option>admin</option></select></div>
     <div><label class="f">First name</label><input id="af" style="width:100%"></div><div><label class="f">Last name</label><input id="al" style="width:100%"></div>
     <div><label class="f">Language</label><select id="ag" style="width:100%"><option value="es">Spanish</option><option value="en">English</option></select></div></div>
     <div id="de"></div>
