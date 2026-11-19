@@ -1,5 +1,5 @@
 // Caches the app shell so it opens with weak signal. Time punches always go to the server.
-const CACHE = 'imt-timeclock-v22';
+const CACHE = 'imt-timeclock-v23';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './logo.png', './logo-mark.png', './vendor/supabase.js'];
 
 self.addEventListener('install', e => {
@@ -12,7 +12,9 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return; // never cache Supabase calls
   // network first, fall back to cache
-  e.respondWith(fetch(e.request).then(r => {
+  // Pages are always re-checked with the server, so a new version shows on the next load instead of up to 10 minutes later
+  const page = e.request.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('.html');
+  e.respondWith(fetch(e.request, page ? { cache: 'no-cache' } : undefined).then(r => {
     const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return r;
   }).catch(() => caches.match(e.request).then(r => r || caches.match('./index.html'))));
 });
