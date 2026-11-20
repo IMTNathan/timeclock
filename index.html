@@ -528,7 +528,7 @@ async function renderCrew(flash = '') {
     ${flash ? `<div class="msg">${esc(flash)}</div>` : ''}
     <div class="card">
       <details><summary class="muted">📍 ${t('setLocHere')}</summary>
-        <select id="slj" style="margin-top:8px">${S.jobs.filter(j => j.is_active).map(j => `<option value="${esc(j.code)}" ${j.code === S.myOpenJob ? 'selected' : ''}>${esc(j.code)} – ${esc(j.description)}${j.latitude == null ? ' (' + t('notSet') + ')' : ''}</option>`).join('')}</select>
+        <select id="slj" style="margin-top:8px">${S.myOpenJob ? '' : '<option value="">—</option>'}${S.jobs.filter(j => j.is_active).map(j => `<option value="${esc(j.code)}" ${j.code === S.myOpenJob ? 'selected' : ''}>${esc(j.code)} – ${esc(j.description)}${j.latitude == null ? ' (' + t('notSet') + ')' : ''}</option>`).join('')}</select>
         <button class="btn primary" style="width:100%;margin-top:8px" id="slb">${t('setLocHere')}</button></details>
       <button class="btn" style="width:100%;margin-top:10px" id="addShift">＋ ${t('addShift')}</button>
     </div>
