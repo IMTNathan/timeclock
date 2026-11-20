@@ -193,7 +193,7 @@ const fTime = iso => iso ? new Date(iso).toLocaleTimeString('en-US', { hour:'num
 const h = n => (Math.round((+n || 0) * 100) / 100).toFixed(2);
 const fDist = m => { if (m == null) return ''; const ft = m * 3.28084; return ft < 1000 ? `${Math.round(ft / 10) * 10} ft` : `${(ft / 5280).toFixed(1)} mi`; };
 const toLocalInput = iso => { if (!iso) return ''; const d = new Date(iso); return `${dstr(d)}T${z(d.getHours())}:${z(d.getMinutes())}`; };
-const ERR = { owner_only:'Only the owner can do that.', owner_always_admin:'The owner is always an active admin.', owner_change_not_allowed:'Ownership cannot be changed here.', breakglass_always_on:'The emergency login is always on and always an admin.', breakglass_password_rule:'The emergency password must be 14 to 72 characters.', bad_times:'Check the times: clock-out must be after clock-in, not in the future, and under 24 hours.', overlaps_existing:'That person already has time during those hours.', foreman_not_on_job:'Not allowed on that job.', already_clocked_in:'Already clocked in.', not_allowed:'Not allowed.', reason_required:'A reason is required.', pin_must_be_4_digits:'PIN must be 4 digits.', cost_code_required:'This job needs a cost code.', cost_code_not_on_job:'That cost code is not on this job.', employee_not_found:'Employee not found.' };
+const ERR = { owner_only:'Only the owner can do that.', owner_always_admin:'The owner is always an active admin.', owner_change_not_allowed:'Ownership cannot be changed here.', breakglass_always_on:'The emergency login is always on and always an admin.', breakglass_password_rule:'The emergency password must be 14 to 72 characters.', bad_times:'Check the times: clock-out must be after clock-in, not in the future, and under 24 hours.', overlaps_existing:'That person already has time during those hours.', foreman_not_on_job:'Not allowed on that job.', already_clocked_in:'Already clocked in.', not_allowed:'Not allowed.', reason_required:'A reason is required.', pin_must_be_4_digits:'PIN must be 4 digits.', cost_code_required:'Pick a cost code.', cost_code_not_on_job:'That cost code is not on this job.', employee_not_found:'Employee not found.' };
 const errText = e => { const m = e?.message || String(e); for (const k in ERR) if (m.includes(k)) return ERR[k]; return /fetch|network/i.test(m) ? 'Connection problem — try again.' : m; };
 function csv(rows, cols, name) {
   const body = [cols.map(c => c[1]).join(','), ...rows.map(r => cols.map(c => `"${String(typeof c[0] === 'function' ? c[0](r) : r[c[0]] ?? '').replace(/"/g, '""')}"`).join(','))].join('\r\n');
@@ -207,6 +207,8 @@ async function all(query) { // page through >1000 rows
 // ---------- state ----------
 const S = { me:null, page:'dashboard', week:weekStart(dstr()), jobs:[], ccs:[], emps:[], flash:'', filters:{ status:'review', emp:'', job:'', q:'' }, sort:{ col:'work_date', dir:1 } };
 
+// a shift on a job that has cost codes, but none picked yet (optional at clock-in since 2026-11-20)
+function needsCC(s) { return !s.cost_code && S.ccs.some(c => c.job_code === s.job_code && c.is_active); }
 function statusTags(s) {
   const t = [];
   if (s.missed_clockout) t.push('<span class="tag bad">Missed clock-out</span>');
@@ -348,7 +350,7 @@ PAGE.time = async main => {
   let view = rows.filter(s =>
     (F.status === 'all' || (F.status === 'review' && (needsReview(s) || !s.clock_out)) || (F.status === 'approved' && s.status === 'approved')
       || (F.status === 'declined' && (s.status === 'rejected' || s.worker_response === 'declined'))
-      || (F.status === 'outside' && (s.outside_in || s.outside_out || s.outside_checks > 0)) || (F.status === 'missed' && (s.missed_clockout || s.long_shift)))
+      || (F.status === 'nocc' && needsCC(s)) || (F.status === 'outside' && (s.outside_in || s.outside_out || s.outside_checks > 0)) || (F.status === 'missed' && (s.missed_clockout || s.long_shift)))
     && (!F.emp || s.employee_code === F.emp) && (!F.job || s.job_code === F.job)
     && (!q || `${s.first_name} ${s.last_name} ${s.job_code} ${s.cost_code || ''} ${s.cost_code_description || ''}`.toLowerCase().includes(q)));
   const { col, dir } = S.sort;
@@ -357,10 +359,10 @@ PAGE.time = async main => {
   const empOpts = [...new Map(rows.map(s => [s.employee_code, `${s.last_name}, ${s.first_name}`])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
   const jobOpts = [...new Set(rows.map(s => s.job_code))].sort();
   const th = (c, l, cls = '') => `<th class="sort ${cls}" data-sort="${c}">${l}${col === c ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
-  main.innerHTML = `<h1>Time review</h1><div class="sub">Approve, decline or fix shifts. Select rows with the checkboxes, then use the buttons.</div>${flash()}
+  main.innerHTML = `<h1>Time review</h1><div class="sub">Approve, decline or fix shifts. Select rows with the checkboxes, then use the buttons. A cost code is optional at clock-in; add it here with Add code.</div>${flash()}
     <div class="toolbar">${weekBar()}</div>
     <div class="toolbar">
-      <select id="fs">${[['review','Needs review'],['all','All shifts'],['approved','Approved'],['declined','Declined'],['outside','Outside site'],['missed','Missed clock-out / very long']].map(([v, l]) => `<option value="${v}" ${F.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <select id="fs">${[['review','Needs review'],['all','All shifts'],['approved','Approved'],['declined','Declined'],['nocc','No cost code'],['outside','Outside site'],['missed','Missed clock-out / very long']].map(([v, l]) => `<option value="${v}" ${F.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <select id="fe"><option value="">All employees</option>${empOpts.map(([c, n]) => `<option value="${c}" ${F.emp === c ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
       <select id="fj"><option value="">All jobs</option>${jobOpts.map(j => `<option value="${esc(j)}" ${F.job === j ? 'selected' : ''}>${esc(jobLabel(j))}</option>`).join('')}</select>
       <input id="fq" placeholder="Search name, job, cost code" value="${esc(F.q)}" style="width:220px">
@@ -377,7 +379,7 @@ PAGE.time = async main => {
         <td class="nowrap">${fDate(s.work_date)}</td>
         <td class="nowrap"><b>${esc(s.last_name)}, ${esc(s.first_name)}</b> <span class="muted">${esc(s.employee_code)}</span></td>
         <td title="${esc(s.job_description)}">${esc(s.job_code)}</td>
-        <td title="${esc(s.cost_code_description)}">${s.cost_code ? `${esc(s.cost_code)} <span class="muted">${esc((s.cost_code_description || '').slice(0, 26))}</span>` : '<span class="muted">—</span>'}</td>
+        <td title="${esc(s.cost_code_description)}">${s.cost_code ? `${esc(s.cost_code)} <span class="muted">${esc((s.cost_code_description || '').slice(0, 26))}</span>` : (needsCC(s) ? `<button class="btn sm" data-setcc="${s.id}">Add code</button>` : '<span class="muted">—</span>')}</td>
         <td class="nowrap">${fTime(s.clock_in)}</td><td class="nowrap">${fTime(s.clock_out)}</td>
         <td class="n">${s.clock_out ? h(s.lunch_hours) : ''}</td><td class="n"><b>${s.clock_out ? h(s.net_hours) : '—'}</b></td>
         <td>${statusTags(s)}</td>
@@ -407,6 +409,7 @@ PAGE.time = async main => {
   document.getElementById('dl').onclick = () => csv(view, [['work_date','Date'],['employee_code','Employee #'],['last_name','Last'],['first_name','First'],['job_code','Job'],['cost_code','Cost code'],['cost_code_description','Cost code name'],[r => fTime(r.clock_in),'In'],[r => fTime(r.clock_out),'Out'],['lunch_hours','Lunch'],['net_hours','Hours'],['status','Status'],['worker_response','Worker'],['worker_note','Worker note'],['decline_reason','Decline reason'],['in_distance_m','In distance (m)'],['out_distance_m','Out distance (m)'],[r => r.manual ? 'yes' : '','Added by hand'],[r => r.long_shift ? 'yes' : '','Very long']], `time_${S.week}.csv`);
   main.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editDialog(rows.find(s => s.id === b.dataset.edit)));
   main.querySelectorAll('[data-hist]').forEach(b => b.onclick = () => historyDialog(rows.find(s => s.id === b.dataset.hist)));
+  main.querySelectorAll('[data-setcc]').forEach(b => b.onclick = () => setCostCodeDialog(rows.find(s => s.id === b.dataset.setcc), rows));
   document.getElementById('addsh').onclick = () => addShiftDialog();
 };
 
@@ -577,6 +580,27 @@ function reasonDialog(title, label, onOk) {
   document.getElementById('rr').focus();
   document.getElementById('c').onclick = closeDlg;
   document.getElementById('ok').onclick = async () => { const r = document.getElementById('rr').value.trim(); if (!r) return dErr('Enter a reason.'); closeDlg(); await onOk(r); };
+}
+
+// Put the cost code on a shift after the fact. Hours, approvals and the worker's answer are not touched.
+function setCostCodeDialog(s, rows) {
+  const codes = S.ccs.filter(c => c.job_code === s.job_code && c.is_active);
+  const others = rows.filter(r => r.id !== s.id && r.job_code === s.job_code && r.work_date === s.work_date && needsCC(r));
+  openDlg(`<h1>Add cost code</h1><div class="sub">${esc(s.first_name)} ${esc(s.last_name)} · ${fDate(s.work_date)} · ${esc(jobLabel(s.job_code))}</div>
+    <label class="f">Cost code</label><select id="scc" style="width:100%"><option value="">—</option>${codes.map(c => `<option value="${esc(c.code)}">${esc(c.code)} – ${esc(c.description)}</option>`).join('')}</select>
+    ${others.length ? `<label style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="sccAll"> Also put it on the other ${others.length} shift(s) on this job on ${fDate(s.work_date)} that have no cost code</label>` : ''}
+    <div class="muted" style="margin-top:10px">Hours and approvals do not change. The change is kept in the shift history.</div>
+    <div id="de"></div>
+    <div class="toolbar" style="margin-top:16px;justify-content:flex-end"><button class="btn" id="c">Cancel</button><button class="btn primary" id="ok">Save</button></div>`);
+  document.getElementById('c').onclick = closeDlg;
+  document.getElementById('ok').onclick = async () => {
+    const cc = document.getElementById('scc').value; if (!cc) return dErr('Pick a cost code.');
+    const all = document.getElementById('sccAll');
+    const ids = [s.id, ...(all && all.checked ? others.map(r => r.id) : [])];
+    const { data: n, error } = await sb.rpc('tc_set_cost_code', { p_ids: ids, p_cost_code: cc });
+    if (error) return dErr(errText(error));
+    closeDlg(); S.flash = `Cost code set on ${n} shift(s).`; render();
+  };
 }
 
 function editDialog(s) {
